@@ -171,11 +171,25 @@ function render_forms_by_dan_form() {
         function renderForm() {
             const stepContent = formSteps[currentStep].html;
             const wrappedContent = currentStep > 0 ? `<div class="claims-section">${stepContent}</div>` : stepContent;
+            let summaryHtml = '';
+            if (currentStep === formSteps.length - 1) {
+                const saved = JSON.parse(localStorage.getItem(storageKey) || '{}');
+                summaryHtml = '<div class="summary-section"><h3>Selected Benefits:</h3><ul>';
+                if (saved['creditMonitoring']) summaryHtml += '<li>Credit Monitoring Reimbursement</li>';
+                if (saved['claimOrdinary']) summaryHtml += '<li>Ordinary Unreimbursed Losses</li>';
+                if (saved['claimTime']) summaryHtml += '<li>Reimbursement for Time</li>';
+                if (saved['claimExtraordinary']) summaryHtml += '<li>Extraordinary Unreimbursed Losses</li>';
+                summaryHtml += '</ul>';
+                const warningMsg = '<div id="benefitWarning" class="error-message hidden">You have not selected any claim benefits. Please go back and select at least one claim benefit to proceed.</div>';
+                summaryHtml += warningMsg;
+                summaryHtml += '</div>';
+            }
 
             formRoot.innerHTML = `
                 <form id="formsByDanForm" enctype="multipart/form-data">
                     <h2>${formSteps[currentStep].title}</h2>
                     ${wrappedContent}
+                    ${summaryHtml}
                     <div class="form-navigation">
                         <button type="button" id="prevBtn">Back</button>
                         <button type="button" id="nextBtn">Next</button>

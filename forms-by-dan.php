@@ -68,13 +68,69 @@ function render_forms_by_dan_form() {
         }
         input, select, textarea {
             width: 100%;
-            padding: 10px;
-            margin: 10px 0;
+            padding: 12px;
+            margin: 8px 0 20px 0;
             box-sizing: border-box;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            font-size: 16px;
+        }
+        button {
+            padding: 12px 24px;
+            font-size: 16px;
+            border: none;
+            border-radius: 5px;
+            background-color: #0073aa;
+            color: #ffffff !important;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        button:hover {
+            background-color: #005f8d;
         }
         .hidden { display: none; }
         .error-message { color: red; font-weight: bold; }
-        .form-navigation { display: flex; justify-content: space-between; margin-top: 20px; }
+        .form-navigation {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 30px;
+        }
+        .claims-section label {
+            display: block;
+            margin-top: 10px;
+        }
+
+        .claims-section input,
+        .claims-section select,
+        .claims-section textarea {
+            width: 100% !important;
+            display: block;
+            margin: 8px 0 20px 0 !important;
+            padding: 12px !important;
+            box-sizing: border-box !important;
+            border: 1px solid #ccc !important;
+            border-radius: 4px !important;
+            font-size: 16px !important;
+            background-color: white !important;
+            color: black !important;
+        }
+
+        .claims-section input[type="checkbox"]::after,
+        .claims-section input[type="checkbox"]::before {
+            content: none !important;
+            display: none !important;
+        }
+
+        .claims-section label {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .claims-section input[type="checkbox"] {
+            width: auto !important;
+            margin: 0 !important;
+        }
     </style>
     <script>
     document.addEventListener('DOMContentLoaded', function () {
@@ -113,11 +169,13 @@ function render_forms_by_dan_form() {
         }
 
         function renderForm() {
-            const isFinalStep = currentStep === formSteps.length - 1;
+            const stepContent = formSteps[currentStep].html;
+            const wrappedContent = currentStep > 0 ? `<div class="claims-section">${stepContent}</div>` : stepContent;
+
             formRoot.innerHTML = `
                 <form id="formsByDanForm" enctype="multipart/form-data">
                     <h2>${formSteps[currentStep].title}</h2>
-                    ${formSteps[currentStep].html}
+                    ${wrappedContent}
                     <div class="form-navigation">
                         <button type="button" id="prevBtn">Back</button>
                         <button type="button" id="nextBtn">Next</button>
@@ -127,9 +185,16 @@ function render_forms_by_dan_form() {
 
             loadProgress();
 
-            if (isFinalStep) {
+            if (currentStep === formSteps.length - 1) {
                 const saved = JSON.parse(localStorage.getItem(storageKey) || '{}');
                 const anyClaimed = !!(saved['creditMonitoring'] || saved['claimOrdinary'] || saved['claimTime'] || saved['claimExtraordinary']);
+                console.log('Benefit claim status:', {
+                    creditMonitoring: saved['creditMonitoring'],
+                    claimOrdinary: saved['claimOrdinary'],
+                    claimTime: saved['claimTime'],
+                    claimExtraordinary: saved['claimExtraordinary'],
+                    anyClaimed
+                });
                 const warning = document.getElementById('benefitWarning');
                 if (warning) {
                     if (!anyClaimed) {

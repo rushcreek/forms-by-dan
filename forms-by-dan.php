@@ -338,11 +338,43 @@ function render_forms_by_dan_form($atts) {
                 document.getElementById('formsByDanForm').onsubmit = e => {
                     e.preventDefault();
                     saveProgress();
-                    const formData = new FormData(document.getElementById('formsByDanForm'));
-                    fetch(document.getElementById('forms-by-dan-webhook-url').textContent.trim(), {
-                        method: 'POST',
-                        body: formData
-                    }).then(() => alert('Submitted')).catch(() => alert('Submission failed.'));
+                    const savedData = JSON.parse(localStorage.getItem('multiStepFormData') || '{}');
+                    const form = document.getElementById('formsByDanForm');
+                    const payload = { ...savedData, files: {} };
+                    const fileInputs = form.querySelectorAll('input[type="file"]');
+                    const readFilePromises = [];
+
+                    fileInputs.forEach(input => {
+                        if (input.files.length > 0) {
+                            payload.files[input.name] = [];
+                            for (let i = 0; i < input.files.length; i++) {
+                                const file = input.files[i];
+                                const reader = new FileReader();
+                                const promise = new Promise(resolve => {
+                                    reader.onload = () => {
+                                        payload.files[input.name].push({
+                                            name: file.name,
+                                            type: file.type,
+                                            data: reader.result.split(',')[1]
+                                        });
+                                        resolve();
+                                    };
+                                });
+                                reader.readAsDataURL(file);
+                                readFilePromises.push(promise);
+                            }
+                        }
+                    });
+
+                    Promise.all(readFilePromises).then(() => {
+                        fetch(document.getElementById('forms-by-dan-webhook-url').textContent.trim(), {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify(payload)
+                        }).then(() => alert('Submitted')).catch(() => alert('Submission failed.'));
+                    });
                 };
 
                 attachConditionalHandlers();

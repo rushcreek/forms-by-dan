@@ -26,6 +26,19 @@ add_action('init', function() {
     ]);
 });
 
+// CORS: Allow requests from atticuswebhookapi.azure-api.net
+add_action('init', function() {
+    if (isset($_SERVER['HTTP_ORIGIN']) && strpos($_SERVER['HTTP_ORIGIN'], 'atticuswebhookapi.azure-api.net') !== false) {
+        header('Access-Control-Allow-Origin: https://atticuswebhookapi.azure-api.net');
+        header('Access-Control-Allow-Methods: POST, GET, OPTIONS');
+        header('Access-Control-Allow-Headers: Content-Type, Authorization');
+        if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
+            http_response_code(200);
+            exit();
+        }
+    }
+});
+
 // Add meta box for form configuration
 add_action('add_meta_boxes', function () {
     add_meta_box('forms_by_dan_meta', 'Form Configuration', 'render_forms_by_dan_meta_box', 'forms_by_dan_form', 'normal', 'high');
@@ -289,6 +302,26 @@ function render_forms_by_dan_form($atts) {
                 submitBtn.disabled = !(isLastStep && isValid);
             }
 
+            // Add this function before renderForm
+            function getCustomWarnings(saved, formConfig) {
+                const warnings = [];
+                if (formConfig && Array.isArray(formConfig.warnings)) {
+                    formConfig.warnings.forEach(warn => {
+                        // Example: { condition: "!saved['creditMonitoring'] && !saved['claimOrdinary'] && !saved['claimTime'] && !saved['claimExtraordinary']", message: "You have not selected any claim benefits. Please go back and select at least one claim benefit to proceed." }
+                        try {
+                            // eslint-disable-next-line no-new-func
+                            const conditionFn = new Function('saved', `return (${warn.condition});`);
+                            if (conditionFn(saved)) {
+                                warnings.push(warn.message);
+                            }
+                        } catch (e) {
+                            console.error('Warning condition error:', e, warn);
+                        }
+                    });
+                }
+                return warnings;
+            }
+
             function renderForm() {
                 const step = formSteps[currentStep];
                 const instructionHtml = step.instruction ? `<div class="form-instruction">${step.instruction}</div>` : '';
@@ -297,6 +330,12 @@ function render_forms_by_dan_form($atts) {
                 let summaryHtml = '';
                 if (currentStep === formSteps.length - 1) {
                     const saved = JSON.parse(localStorage.getItem(storageKey) || '{}');
+                    // Get form config (with warnings) from the JSON definition
+                    let formConfig = {};
+                    try {
+                        formConfig = JSON.parse(document.getElementById('forms-by-dan-definition').textContent.replace(/&quot;/g, '"'));
+                        if (Array.isArray(formConfig)) formConfig = { steps: formConfig }; // fallback for old format
+                    } catch (e) { formConfig = {}; }
                     // Build a summary of all filled fields, checked boxes, selected files, etc.
                     const form = document.createElement('form');
                     // Combine all step HTML to get all fields
@@ -345,8 +384,11 @@ function render_forms_by_dan_form($atts) {
                         }
                     });
                     summaryHtml = `<div class="summary-section"><h3>Summary of Your Submission:</h3><ul>${summaryList}</ul></div>`;
-                    const warningMsg = '<div id="benefitWarning" class="error-message hidden">You have not selected any claim benefits. Please go back and select at least one claim benefit to proceed.</div>';
-                    summaryHtml += warningMsg;
+                    // Custom warnings from JSON
+                    const customWarnings = getCustomWarnings(saved, formConfig);
+                    customWarnings.forEach(msg => {
+                        summaryHtml += `<div class="error-message">${msg}</div>`;
+                    });
                 }
 
                 formRoot.innerHTML = `

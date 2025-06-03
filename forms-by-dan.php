@@ -45,12 +45,16 @@ add_action('add_meta_boxes', function () {
 });
 
 // Render the custom meta box
+// Add API Key field to meta box
 function render_forms_by_dan_meta_box($post) {
     $form_json = get_post_meta($post->ID, '_forms_by_dan_form_json', true);
     $webhook_url = get_post_meta($post->ID, '_forms_by_dan_webhook_url', true);
+    $api_key = get_post_meta($post->ID, '_forms_by_dan_api_key', true);
     wp_nonce_field('save_forms_by_dan_meta', 'forms_by_dan_nonce');
     echo '<p><label for="forms_by_dan_webhook_url">Webhook URL:</label><br>';
     echo '<input type="text" id="forms_by_dan_webhook_url" name="forms_by_dan_webhook_url" value="' . esc_attr($webhook_url) . '" style="width:100%;"></p>';
+    echo '<p><label for="forms_by_dan_api_key">API Key (ocp-apim-subscription-key):</label><br>';
+    echo '<input type="text" id="forms_by_dan_api_key" name="forms_by_dan_api_key" value="' . esc_attr($api_key) . '" style="width:100%;"></p>';
     echo '<p><label for="forms_by_dan_form_json">Form JSON:</label><br>';
     echo '<textarea id="forms_by_dan_form_json" name="forms_by_dan_form_json" rows="15" style="width:100%;">' . esc_textarea($form_json) . '</textarea></p>';
 
@@ -67,6 +71,9 @@ add_action('save_post', function ($post_id) {
     if (!current_user_can('edit_post', $post_id)) return;
     if (isset($_POST['forms_by_dan_webhook_url'])) {
         update_post_meta($post_id, '_forms_by_dan_webhook_url', sanitize_text_field($_POST['forms_by_dan_webhook_url']));
+    }
+    if (isset($_POST['forms_by_dan_api_key'])) {
+        update_post_meta($post_id, '_forms_by_dan_api_key', sanitize_text_field($_POST['forms_by_dan_api_key']));
     }
     if (isset($_POST['forms_by_dan_form_json'])) {
         update_post_meta($post_id, '_forms_by_dan_form_json', $_POST['forms_by_dan_form_json']);
@@ -97,11 +104,13 @@ function render_forms_by_dan_form($atts) {
 
     $form_json = get_post_meta($post->ID, '_forms_by_dan_form_json', true);
     $webhook_url = esc_url(get_post_meta($post->ID, '_forms_by_dan_webhook_url', true));
+    $api_key = esc_attr(get_post_meta($post->ID, '_forms_by_dan_api_key', true));
     ob_start();
     ?>
     <div id="formsByDanRoot"></div>
 <script type="application/json" id="forms-by-dan-definition"><?php echo $form_json; ?></script>
 <script type="text/plain" id="forms-by-dan-webhook-url"><?php echo $webhook_url; ?></script>
+<script type="text/plain" id="forms-by-dan-api-key"><?php echo $api_key; ?></script>
     <style>
         /* Inline styles for the form */
         #formsByDanRoot {
@@ -500,7 +509,8 @@ function render_forms_by_dan_form($atts) {
                         fetch(document.getElementById('forms-by-dan-webhook-url').textContent.trim(), {
                             method: 'POST',
                             headers: {
-                                'Content-Type': 'application/json'
+                                'Content-Type': 'application/json',
+                                'Ocp-Apim-Subscription-Key': document.getElementById('forms-by-dan-api-key').textContent.trim()
                             },
                             body: JSON.stringify(payload)
                         }).then(() => alert('Submitted')).catch(() => alert('Submission failed.'));

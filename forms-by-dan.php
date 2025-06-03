@@ -166,6 +166,12 @@ function render_forms_by_dan_form($atts) {
             width: auto !important;
             margin: 0 !important;
         }
+
+        .form-instruction {
+            font-size: 1.1em;
+            margin-bottom: 16px;
+            color: #333;
+        }
     </style>
     <script>
     document.addEventListener('DOMContentLoaded', function () {
@@ -181,13 +187,16 @@ function render_forms_by_dan_form($atts) {
             function saveProgress() {
                 const form = document.getElementById('formsByDanForm');
                 const inputs = form.querySelectorAll('input, select, textarea');
+                // Load existing data so we don't lose values from previous steps
                 const data = JSON.parse(localStorage.getItem(storageKey) || '{}');
                 inputs.forEach(input => {
-                    if (!input.name) return;
+                    // Use name if available, otherwise fallback to id
+                    const key = input.name || input.id;
+                    if (!key) return;
                     if (input.type === 'checkbox') {
-                        data[input.name] = input.checked;
+                        data[key] = input.checked;
                     } else if (input.type !== 'file') {
-                        data[input.name] = input.value;
+                        data[key] = input.value;
                     }
                 });
                 localStorage.setItem(storageKey, JSON.stringify(data));
@@ -197,11 +206,14 @@ function render_forms_by_dan_form($atts) {
                 const data = JSON.parse(localStorage.getItem(storageKey) || '{}');
                 const inputs = document.querySelectorAll('input, select, textarea');
                 inputs.forEach(input => {
-                    if (!input.name || !(input.name in data)) return;
+                    if (!input.name && !input.id) return;
+                    // Use name if available, otherwise fallback to id
+                    const key = input.name || input.id;
+                    if (!(key in data)) return;
                     if (input.type === 'checkbox') {
-                        input.checked = data[input.name];
+                        input.checked = !!data[key];
                     } else if (input.type !== 'file') {
-                        input.value = data[input.name];
+                        input.value = data[key];
                     }
                 });
             }
@@ -245,8 +257,10 @@ function render_forms_by_dan_form($atts) {
             }
 
             function renderForm() {
-                const stepContent = formSteps[currentStep].html;
-                const wrappedContent = `<div class="claims-section">${stepContent}</div>`;
+                const step = formSteps[currentStep];
+                const instructionHtml = step.instruction ? `<div class="form-instruction">${step.instruction}</div>` : '';
+                const stepContent = step.html;
+                const wrappedContent = `<div class="claims-section">${instructionHtml}${stepContent}</div>`;
                 let summaryHtml = '';
                 if (currentStep === formSteps.length - 1) {
                     const saved = JSON.parse(localStorage.getItem(storageKey) || '{}');
@@ -263,7 +277,7 @@ function render_forms_by_dan_form($atts) {
 
                 formRoot.innerHTML = `
                     <form id="formsByDanForm" enctype="multipart/form-data" method="POST">
-                        <h2>${formSteps[currentStep].title}</h2>
+                        <h2>${step.title}</h2>
                         ${wrappedContent}
                         ${summaryHtml}
                         <div class="form-navigation">

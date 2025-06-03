@@ -228,13 +228,46 @@ function render_forms_by_dan_form($atts) {
                     formStepsData.forEach(step => {
                         const parser = new DOMParser();
                         const doc = parser.parseFromString(step.html, 'text/html');
+                        // Validate all [required] fields
                         const requiredElements = doc.querySelectorAll('[required]');
                         requiredElements.forEach(el => {
-                            const name = el.name;
+                            const name = el.name || el.id;
                             if (el.type === 'checkbox') {
                                 if (!savedData[name]) isValid = false;
+                            } else if (el.type === 'file') {
+                                const form = document.getElementById('formsByDanForm');
+                                // Try both name and id for file input
+                                let fileInput = null;
+                                if (form) {
+                                    fileInput = form.querySelector(`[name="${name}"]`) || form.querySelector(`#${name}`);
+                                }
+                                if (!fileInput || !fileInput.files || fileInput.files.length === 0) {
+                                    isValid = false;
+                                }
                             } else if (!savedData[name] || savedData[name].toString().trim() === '') {
                                 isValid = false;
+                            }
+                        });
+                        // Validate all .required-if-visible fields that are visible
+                        const requiredIfVisibleElements = doc.querySelectorAll('.required-if-visible');
+                        requiredIfVisibleElements.forEach(el => {
+                            const name = el.name || el.id;
+                            const form = document.getElementById('formsByDanForm');
+                            // Try both name and id for file input
+                            let liveInput = null;
+                            if (form) {
+                                liveInput = form.querySelector(`[name="${name}"]`) || form.querySelector(`#${name}`);
+                            }
+                            if (liveInput && liveInput.offsetParent !== null) {
+                                if (el.type === 'checkbox') {
+                                    if (!savedData[name]) isValid = false;
+                                } else if (el.type === 'file') {
+                                    if (!liveInput.files || liveInput.files.length === 0) {
+                                        isValid = false;
+                                    }
+                                } else if (!savedData[name] || savedData[name].toString().trim() === '') {
+                                    isValid = false;
+                                }
                             }
                         });
                     });
@@ -250,10 +283,10 @@ function render_forms_by_dan_form($atts) {
                 const form = document.getElementById('formsByDanForm');
                 const submitBtn = document.getElementById('submitBtn');
                 if (!submitBtn || !form) return;
+                // Only enable submit button on the last step and if all steps are valid
+                const isLastStep = (typeof formSteps !== 'undefined') && (typeof currentStep !== 'undefined') && (currentStep === formSteps.length - 1);
                 const isValid = allStepsValid();
-                console.log('Checking all steps validity:', isValid);
-                console.log('Submit button will be', isValid ? 'enabled' : 'disabled');
-                submitBtn.disabled = !isValid;
+                submitBtn.disabled = !(isLastStep && isValid);
             }
 
             function renderForm() {
@@ -264,15 +297,56 @@ function render_forms_by_dan_form($atts) {
                 let summaryHtml = '';
                 if (currentStep === formSteps.length - 1) {
                     const saved = JSON.parse(localStorage.getItem(storageKey) || '{}');
-                    summaryHtml = '<div class="summary-section"><h3>Selected Benefits:</h3><ul>';
-                    if (saved['creditMonitoring']) summaryHtml += '<li>Credit Monitoring Reimbursement</li>';
-                    if (saved['claimOrdinary']) summaryHtml += '<li>Ordinary Unreimbursed Losses</li>';
-                    if (saved['claimTime']) summaryHtml += '<li>Reimbursement for Time</li>';
-                    if (saved['claimExtraordinary']) summaryHtml += '<li>Extraordinary Unreimbursed Losses</li>';
-                    summaryHtml += '</ul>';
+                    // Build a summary of all filled fields, checked boxes, selected files, etc.
+                    const form = document.createElement('form');
+                    // Combine all step HTML to get all fields
+                    formSteps.forEach(s => {
+                        const tempDiv = document.createElement('div');
+                        tempDiv.innerHTML = s.html;
+                        Array.from(tempDiv.children).forEach(child => form.appendChild(child.cloneNode(true)));
+                    });
+                    // Find all inputs, selects, textareas
+                    const allFields = form.querySelectorAll('input, select, textarea');
+                    let summaryList = '';
+                    allFields.forEach(field => {
+                        const key = field.name || field.id;
+                        if (!key) return;
+                        let label = '';
+                        // Try to find a label for this field
+                        const labelEl = form.querySelector(`label[for="${field.id}"]`) || (field.closest('label'));
+                        if (labelEl) {
+                            label = labelEl.textContent.trim();
+                        } else {
+                            label = key;
+                        }
+                        if (field.type === 'checkbox') {
+                            if (saved[key]) {
+                                summaryList += `<li>${label}: Checked</li>`;
+                            }
+                        } else if (field.type === 'file') {
+                            if (saved.files && saved.files[key] && saved.files[key].length > 0) {
+                                const fileNames = saved.files[key].map(f => f.name).join(', ');
+                                summaryList += `<li>${label}: ${fileNames}</li>`;
+                            }
+                        } else if (field.tagName.toLowerCase() === 'select') {
+                            if (saved[key]) {
+                                const selectedOption = Array.from(field.options).find(opt => opt.value == saved[key]);
+                                const display = selectedOption ? selectedOption.text : saved[key];
+                                summaryList += `<li>${label}: ${display}</li>`;
+                            }
+                        } else if (field.type === 'radio') {
+                            if (saved[key] && field.value === saved[key]) {
+                                summaryList += `<li>${label}: ${field.value}</li>`;
+                            }
+                        } else {
+                            if (saved[key] && saved[key].toString().trim() !== '') {
+                                summaryList += `<li>${label}: ${saved[key]}</li>`;
+                            }
+                        }
+                    });
+                    summaryHtml = `<div class="summary-section"><h3>Summary of Your Submission:</h3><ul>${summaryList}</ul></div>`;
                     const warningMsg = '<div id="benefitWarning" class="error-message hidden">You have not selected any claim benefits. Please go back and select at least one claim benefit to proceed.</div>';
                     summaryHtml += warningMsg;
-                    summaryHtml += '</div>';
                 }
 
                 formRoot.innerHTML = `

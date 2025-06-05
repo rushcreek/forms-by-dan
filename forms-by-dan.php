@@ -201,7 +201,15 @@ function render_forms_by_dan_form($atts) {
         let formStepsRaw = document.getElementById('forms-by-dan-definition').textContent;
         try {
             formStepsRaw = formStepsRaw.replace(/&quot;/g, '"');
-            const formSteps = JSON.parse(formStepsRaw);
+            let formConfig = JSON.parse(formStepsRaw);
+            let formSteps, warnings;
+            if (Array.isArray(formConfig)) {
+                formSteps = formConfig;
+                warnings = [];
+            } else {
+                formSteps = formConfig.steps;
+                warnings = formConfig.warnings || [];
+            }
 
             let currentStep = 0;
             const storageKey = 'multiStepFormData';
@@ -243,8 +251,11 @@ function render_forms_by_dan_form($atts) {
 
             function allStepsValid() {
                 try {
-                    const formStepsData = JSON.parse(document.getElementById('forms-by-dan-definition').textContent.replace(/&quot;/g, '"'));
-                    const savedData = JSON.parse(localStorage.getItem('multiStepFormData') || '{}');
+                    let formStepsData = JSON.parse(document.getElementById('forms-by-dan-definition').textContent.replace(/&quot;/g, '"'));
+                    // Support both array and object with steps
+                    if (!Array.isArray(formStepsData)) {
+                        formStepsData = formStepsData.steps;
+                    }                    const savedData = JSON.parse(localStorage.getItem('multiStepFormData') || '{}');
                     let isValid = true;
 
                     formStepsData.forEach(step => {

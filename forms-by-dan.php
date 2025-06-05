@@ -371,12 +371,24 @@ function render_forms_by_dan_form($atts) {
                         const key = field.name || field.id;
                         if (!key) return;
                         let label = '';
-                        // Try to find a label for this field
-                        const labelEl = form.querySelector(`label[for="${field.id}"]`) || (field.closest('label'));
-                        if (labelEl) {
-                            label = labelEl.textContent.trim();
+                        // For select fields, get the label from the parent label element, not the option text
+                        if (field.tagName && field.tagName.toLowerCase() === 'select') {
+                            // Try to find a label that is the parent of the select
+                            if (field.parentElement && field.parentElement.tagName.toLowerCase() === 'label') {
+                                label = field.parentElement.textContent.trim();
+                                // Remove the text of all child options from the label
+                                Array.from(field.options).forEach(opt => {
+                                    label = label.replace(opt.text, '').trim();
+                                });
+                            } else {
+                                // Fallback to previous logic
+                                const labelEl = form.querySelector(`label[for="${field.id}"]`) || (field.closest('label'));
+                                label = labelEl ? labelEl.textContent.trim() : key;
+                            }
                         } else {
-                            label = key;
+                            // Non-select fields: use previous logic
+                            const labelEl = form.querySelector(`label[for="${field.id}"]`) || (field.closest('label'));
+                            label = labelEl ? labelEl.textContent.trim() : key;
                         }
                         if (field.type === 'checkbox') {
                             if (saved[key]) {
@@ -387,11 +399,20 @@ function render_forms_by_dan_form($atts) {
                                 const fileNames = saved.files[key].map(f => f.name).join(', ');
                                 summaryList += `<li>${label}: ${fileNames}</li>`;
                             }
-                        } else if (field.tagName.toLowerCase() === 'select') {
-                            if (saved[key]) {
-                                const selectedOption = Array.from(field.options).find(opt => opt.value == saved[key]);
-                                const display = selectedOption ? selectedOption.text : saved[key];
-                                summaryList += `<li>${label}: ${display}</li>`;
+                        } else if (field.tagName && field.tagName.toLowerCase() === 'select') {
+                            // Only show if a real value is selected
+                            if (saved[key] && saved[key] !== '' && saved[key] !== '--Select--') {
+                                // Find the selected option's text from the DOM, fallback to value
+                                let selectedText = saved[key];
+                                if (field.options && field.options.length > 0) {
+                                    for (let i = 0; i < field.options.length; i++) {
+                                        if (field.options[i].value == saved[key]) {
+                                            selectedText = field.options[i].text;
+                                            break;
+                                        }
+                                    }
+                                }
+                                summaryList += `<li>${label}: ${selectedText}</li>`;
                             }
                         } else if (field.type === 'radio') {
                             if (saved[key] && field.value === saved[key]) {

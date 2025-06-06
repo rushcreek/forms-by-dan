@@ -50,11 +50,14 @@ function render_forms_by_dan_meta_box($post) {
     $form_json = get_post_meta($post->ID, '_forms_by_dan_form_json', true);
     $webhook_url = get_post_meta($post->ID, '_forms_by_dan_webhook_url', true);
     $api_key = get_post_meta($post->ID, '_forms_by_dan_api_key', true);
+    $redirect_url = get_post_meta($post->ID, '_forms_by_dan_redirect_url', true);
     wp_nonce_field('save_forms_by_dan_meta', 'forms_by_dan_nonce');
     echo '<p><label for="forms_by_dan_webhook_url">Webhook URL:</label><br>';
     echo '<input type="text" id="forms_by_dan_webhook_url" name="forms_by_dan_webhook_url" value="' . esc_attr($webhook_url) . '" style="width:100%;"></p>';
     echo '<p><label for="forms_by_dan_api_key">API Key (ocp-apim-subscription-key):</label><br>';
     echo '<input type="text" id="forms_by_dan_api_key" name="forms_by_dan_api_key" value="' . esc_attr($api_key) . '" style="width:100%;"></p>';
+    echo '<p><label for="forms_by_dan_redirect_url">Redirect URL:</label><br>';
+    echo '<input type="text" id="forms_by_dan_redirect_url" name="forms_by_dan_redirect_url" value="' . esc_attr($redirect_url) . '" style="width:100%;"></p>';
     echo '<p><label for="forms_by_dan_form_json">Form JSON:</label><br>';
     echo '<textarea id="forms_by_dan_form_json" name="forms_by_dan_form_json" rows="15" style="width:100%;">' . esc_textarea($form_json) . '</textarea></p>';
 
@@ -74,6 +77,9 @@ add_action('save_post', function ($post_id) {
     }
     if (isset($_POST['forms_by_dan_api_key'])) {
         update_post_meta($post_id, '_forms_by_dan_api_key', sanitize_text_field($_POST['forms_by_dan_api_key']));
+    }
+    if (isset($_POST['forms_by_dan_redirect_url'])) {
+        update_post_meta($post_id, '_forms_by_dan_redirect_url', esc_url_raw($_POST['forms_by_dan_redirect_url']));
     }
     if (isset($_POST['forms_by_dan_form_json'])) {
         update_post_meta($post_id, '_forms_by_dan_form_json', $_POST['forms_by_dan_form_json']);
@@ -105,12 +111,14 @@ function render_forms_by_dan_form($atts) {
     $form_json = get_post_meta($post->ID, '_forms_by_dan_form_json', true);
     $webhook_url = esc_url(get_post_meta($post->ID, '_forms_by_dan_webhook_url', true));
     $api_key = esc_attr(get_post_meta($post->ID, '_forms_by_dan_api_key', true));
+    $redirect_url = esc_url(get_post_meta($post->ID, '_forms_by_dan_redirect_url', true));
     ob_start();
     ?>
     <div id="formsByDanRoot"></div>
 <script type="application/json" id="forms-by-dan-definition"><?php echo $form_json; ?></script>
 <script type="text/plain" id="forms-by-dan-webhook-url"><?php echo $webhook_url; ?></script>
 <script type="text/plain" id="forms-by-dan-api-key"><?php echo $api_key; ?></script>
+<script type="text/plain" id="forms-by-dan-redirect-url"><?php echo $redirect_url; ?></script>
     <style>
         /* Inline styles for the form */
         #formsByDanRoot {
@@ -575,6 +583,8 @@ function render_forms_by_dan_form($atts) {
                         saveProgress();
                         const savedData = JSON.parse(localStorage.getItem(storageKey) || '{}');
                         savedData.files = savedFiles;
+                        const redirectUrlEl = document.getElementById('forms-by-dan-redirect-url');
+                        const redirectUrl = redirectUrlEl ? redirectUrlEl.textContent.trim() : '';
                         fetch(document.getElementById('forms-by-dan-webhook-url').textContent.trim(), {
                             method: 'POST',
                             headers: {
@@ -582,7 +592,13 @@ function render_forms_by_dan_form($atts) {
                                 'Ocp-Apim-Subscription-Key': document.getElementById('forms-by-dan-api-key').textContent.trim()
                             },
                             body: JSON.stringify(savedData)
-                        }).then(() => alert('Submitted')).catch(() => alert('Submission failed.'));
+                        }).then(() => {
+                            if (redirectUrl) {
+                                window.location.href = redirectUrl;
+                            } else {
+                                alert('Submitted');
+                            }
+                        }).catch(() => alert('Submission failed.'));
                     });
                 };
 

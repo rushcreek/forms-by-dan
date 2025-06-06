@@ -213,14 +213,13 @@ function render_forms_by_dan_form($atts) {
 
             let currentStep = 0;
             const storageKey = 'multiStepFormData';
+            let savedFiles = {};
 
             function saveProgress() {
                 const form = document.getElementById('formsByDanForm');
                 const inputs = form.querySelectorAll('input, select, textarea');
-                // Load existing data so we don't lose values from previous steps
                 const data = JSON.parse(localStorage.getItem(storageKey) || '{}');
                 inputs.forEach(input => {
-                    // Use name if available, otherwise fallback to id
                     const key = input.name || input.id;
                     if (!key) return;
                     if (input.type === 'checkbox') {
@@ -229,15 +228,16 @@ function render_forms_by_dan_form($atts) {
                         data[key] = input.value;
                     }
                 });
+                data.files = savedFiles;
                 localStorage.setItem(storageKey, JSON.stringify(data));
             }
 
             function loadProgress() {
                 const data = JSON.parse(localStorage.getItem(storageKey) || '{}');
+                savedFiles = data.files || {};
                 const inputs = document.querySelectorAll('input, select, textarea');
                 inputs.forEach(input => {
                     if (!input.name && !input.id) return;
-                    // Use name if available, otherwise fallback to id
                     const key = input.name || input.id;
                     if (!(key in data)) return;
                     if (input.type === 'checkbox') {
@@ -320,6 +320,38 @@ function render_forms_by_dan_form($atts) {
                 const isLastStep = (typeof formSteps !== 'undefined') && (typeof currentStep !== 'undefined') && (currentStep === formSteps.length - 1);
                 const isValid = allStepsValid();
                 submitBtn.disabled = !(isLastStep && isValid);
+            }
+
+            function handleFileInputChange(e) {
+                const input = e.target;
+                const key = input.name || input.id;
+                if (!key) return;
+                if (!input.files || input.files.length === 0) {
+                    delete savedFiles[key];
+                    saveProgress();
+                    return;
+                }
+                savedFiles[key] = [];
+                const promises = [];
+                for (let i = 0; i < input.files.length; i++) {
+                    const file = input.files[i];
+                    const reader = new FileReader();
+                    const p = new Promise(resolve => {
+                        reader.onload = () => {
+                            savedFiles[key].push({
+                                name: file.name,
+                                type: file.type,
+                                data: reader.result.split(',')[1]
+                            });
+                            resolve();
+                        };
+                    });
+                    reader.readAsDataURL(file);
+                    promises.push(p);
+                }
+                Promise.all(promises).then(() => {
+                    saveProgress();
+                });
             }
 
             // Add this function before renderForm
@@ -460,6 +492,9 @@ function render_forms_by_dan_form($atts) {
                     if (el.type === 'checkbox') {
                         el.addEventListener('change', updateSubmitButtonState);
                     }
+                    if (el.type === 'file') {
+                        el.addEventListener('change', handleFileInputChange);
+                    }
                 });
 
                 if (currentStep === formSteps.length - 1) {
@@ -508,43 +543,45 @@ function render_forms_by_dan_form($atts) {
 
                 document.getElementById('formsByDanForm').onsubmit = e => {
                     e.preventDefault();
-                    saveProgress();
-                    const savedData = JSON.parse(localStorage.getItem('multiStepFormData') || '{}');
                     const form = document.getElementById('formsByDanForm');
-                    const payload = { ...savedData, files: {} };
                     const fileInputs = form.querySelectorAll('input[type="file"]');
-                    const readFilePromises = [];
-
+                    const readPromises = [];
                     fileInputs.forEach(input => {
-                        if (input.files.length > 0) {
-                            payload.files[input.name] = [];
-                            for (let i = 0; i < input.files.length; i++) {
-                                const file = input.files[i];
-                                const reader = new FileReader();
-                                const promise = new Promise(resolve => {
-                                    reader.onload = () => {
-                                        payload.files[input.name].push({
-                                            name: file.name,
-                                            type: file.type,
-                                            data: reader.result.split(',')[1]
-                                        });
-                                        resolve();
-                                    };
-                                });
-                                reader.readAsDataURL(file);
-                                readFilePromises.push(promise);
-                            }
+                        const key = input.name || input.id;
+                        if (!key) return;
+                        if (!input.files || input.files.length === 0) {
+                            delete savedFiles[key];
+                            return;
+                        }
+                        savedFiles[key] = [];
+                        for (let i = 0; i < input.files.length; i++) {
+                            const file = input.files[i];
+                            const reader = new FileReader();
+                            const p = new Promise(resolve => {
+                                reader.onload = () => {
+                                    savedFiles[key].push({
+                                        name: file.name,
+                                        type: file.type,
+                                        data: reader.result.split(',')[1]
+                                    });
+                                    resolve();
+                                };
+                            });
+                            reader.readAsDataURL(file);
+                            readPromises.push(p);
                         }
                     });
-
-                    Promise.all(readFilePromises).then(() => {
+                    Promise.all(readPromises).then(() => {
+                        saveProgress();
+                        const savedData = JSON.parse(localStorage.getItem(storageKey) || '{}');
+                        savedData.files = savedFiles;
                         fetch(document.getElementById('forms-by-dan-webhook-url').textContent.trim(), {
                             method: 'POST',
                             headers: {
                                 'Content-Type': 'application/json',
                                 'Ocp-Apim-Subscription-Key': document.getElementById('forms-by-dan-api-key').textContent.trim()
                             },
-                            body: JSON.stringify(payload)
+                            body: JSON.stringify(savedData)
                         }).then(() => alert('Submitted')).catch(() => alert('Submission failed.'));
                     });
                 };

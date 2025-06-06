@@ -553,7 +553,21 @@ function render_forms_by_dan_form($atts) {
                 updateSubmitButtonState();
             }
 
+            // In attachConditionalHandlers, support data-toggle-target attribute for checkboxes
             function attachConditionalHandlers() {
+                const checkboxes = document.querySelectorAll('input[type="checkbox"][data-toggle-target]');
+                checkboxes.forEach(box => {
+                    const targetSelector = box.getAttribute('data-toggle-target');
+                    if (!targetSelector) return;
+                    const targets = document.querySelectorAll(targetSelector);
+                    box.onchange = () => {
+                        targets.forEach(div => {
+                            div.classList.toggle('hidden', !box.checked);
+                        });
+                    };
+                    // Initial state
+                    box.dispatchEvent(new Event('change'));
+                });
                 const toggle = (id, fields, required = []) => {
                     const box = document.getElementById(id);
                     const div = document.getElementById(fields);

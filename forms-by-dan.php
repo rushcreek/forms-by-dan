@@ -484,10 +484,12 @@ function render_forms_by_dan_form($atts) {
                         </div>
                     </form>`;
 
-                // Inject query parameters into hidden inputs
+                // Inject query parameters into form inputs
                 const form = document.getElementById('formsByDanForm');
                 const params = new URLSearchParams(window.location.search);
-                ['id', 'lastName', 'salt', 'token'].forEach(name => {
+
+                // id, salt and token may not exist in the form so create hidden inputs
+                ['id', 'salt', 'token'].forEach(name => {
                     let input = form.querySelector(`input[name="${name}"]`);
                     if (!input) {
                         input = document.createElement('input');
@@ -497,6 +499,21 @@ function render_forms_by_dan_form($atts) {
                     }
                     input.value = params.get(name) || '';
                 });
+
+                // Populate the existing lastName field and make it read-only
+                const lastNameField = form.querySelector('input[name="lastName"]');
+                if (lastNameField) {
+                    const ln = params.get('lastName');
+                    if (ln !== null) lastNameField.value = ln;
+                    lastNameField.readOnly = true;
+                } else {
+                    // Fallback: create hidden input if lastName field doesn't exist
+                    const input = document.createElement('input');
+                    input.type = 'hidden';
+                    input.name = 'lastName';
+                    input.value = params.get('lastName') || '';
+                    form.appendChild(input);
+                }
 
                 loadProgress();
                 updateSubmitButtonState();

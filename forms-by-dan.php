@@ -484,6 +484,20 @@ function render_forms_by_dan_form($atts) {
                         </div>
                     </form>`;
 
+                // Inject query parameters into hidden inputs
+                const form = document.getElementById('formsByDanForm');
+                const params = new URLSearchParams(window.location.search);
+                ['id', 'lastName', 'salt', 'token'].forEach(name => {
+                    let input = form.querySelector(`input[name="${name}"]`);
+                    if (!input) {
+                        input = document.createElement('input');
+                        input.type = 'hidden';
+                        input.name = name;
+                        form.appendChild(input);
+                    }
+                    input.value = params.get(name) || '';
+                });
+
                 loadProgress();
                 updateSubmitButtonState();
 

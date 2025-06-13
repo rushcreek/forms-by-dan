@@ -605,8 +605,16 @@ function render_forms_by_dan_form($atts) {
                                 'Content-Type': 'application/json',
                                 'Ocp-Apim-Subscription-Key': document.getElementById('forms-by-dan-api-key').textContent.trim()
                             },
-                            body: JSON.stringify(savedData)
-                        }).then(() => {
+                            body: JSON.stringify(savedData),
+                            redirect: 'manual'
+                        }).then(response => {
+                            if (response.status === 302 || response.status === 301) {
+                                const location = response.headers.get('Location');
+                                if (location) {
+                                    window.location.href = location;
+                                    return;
+                                }
+                            }
                             if (redirectUrl) {
                                 window.location.href = redirectUrl;
                             } else {

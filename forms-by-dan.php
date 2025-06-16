@@ -399,59 +399,77 @@ function render_forms_by_dan_form($atts) {
             function allStepsValid() {
                 try {
                     let formStepsData = JSON.parse(document.getElementById('forms-by-dan-definition').textContent.replace(/&quot;/g, '"'));
-                    // Support both array and object with steps
                     if (!Array.isArray(formStepsData)) {
                         formStepsData = formStepsData.steps;
-                    }                    const savedData = JSON.parse(localStorage.getItem('multiStepFormData') || '{}');
+                    }
+                    const savedData = JSON.parse(localStorage.getItem('multiStepFormData') || '{}');
                     let isValid = true;
 
-                    formStepsData.forEach(step => {
+                    console.log('[Validation] Starting validation for all steps...');
+                    formStepsData.forEach((step, stepIdx) => {
                         const parser = new DOMParser();
                         const doc = parser.parseFromString(step.html, 'text/html');
                         // Validate all [required] fields
                         const requiredElements = doc.querySelectorAll('[required]');
                         requiredElements.forEach(el => {
                             const name = el.name || el.id;
+                            let valid = true;
                             if (el.type === 'checkbox') {
-                                if (!savedData[name]) isValid = false;
+                                valid = !!savedData[name];
                             } else if (el.type === 'file') {
-                                const form = document.getElementById('formsByDanForm');
-                                // Try both name and id for file input
-                                let fileInput = null;
-                                if (form) {
-                                    fileInput = form.querySelector(`[name="${name}"]`) || form.querySelector(`#${name}`);
-                                }
-                                if (!fileInput || !fileInput.files || fileInput.files.length === 0) {
-                                    isValid = false;
-                                }
-                            } else if (!savedData[name] || savedData[name].toString().trim() === '') {
-                                isValid = false;
+                                valid = !!(savedData.files && savedData.files[name] && savedData.files[name].length > 0);
+                            } else {
+                                valid = !!(savedData[name] && savedData[name].toString().trim() !== '');
                             }
+                            console.log(`[Validation][Step ${stepIdx}] [required] Field: ${name}, Type: ${el.type}, Valid: ${valid}, Value:`, savedData[name]);
+                            if (!valid) isValid = false;
                         });
                         // Validate all .required-if-visible fields that are visible
                         const requiredIfVisibleElements = doc.querySelectorAll('.required-if-visible');
                         requiredIfVisibleElements.forEach(el => {
                             const name = el.name || el.id;
+                            // Find the input in the live DOM by name or id
                             const form = document.getElementById('formsByDanForm');
-                            // Try both name and id for file input
                             let liveInput = null;
                             if (form) {
                                 liveInput = form.querySelector(`[name="${name}"]`) || form.querySelector(`#${name}`);
                             }
-                            if (liveInput && liveInput.offsetParent !== null) {
-                                if (el.type === 'checkbox') {
-                                    if (!savedData[name]) isValid = false;
-                                } else if (el.type === 'file') {
-                                    if (!liveInput.files || liveInput.files.length === 0) {
-                                        isValid = false;
+                            // Only validate if the input is visible (not hidden by CSS or parent)
+                            let isVisible = false;
+                            if (liveInput) {
+                                let node = liveInput;
+                                isVisible = true;
+                                while (node) {
+                                    if (node.classList && node.classList.contains('hidden')) {
+                                        isVisible = false;
+                                        break;
                                     }
-                                } else if (!savedData[name] || savedData[name].toString().trim() === '') {
-                                    isValid = false;
+                                    const style = window.getComputedStyle(node);
+                                    if (style.display === 'none' || style.visibility === 'hidden' || style.opacity === '0') {
+                                        isVisible = false;
+                                        break;
+                                    }
+                                    node = node.parentElement;
                                 }
+                            }
+                            if (liveInput && isVisible) {
+                                let valid = true;
+                                if (liveInput.type === 'file') {
+                                    valid = !!(savedData.files && savedData.files[name] && savedData.files[name].length > 0);
+                                } else if (liveInput.type === 'checkbox') {
+                                    valid = !!savedData[name];
+                                } else {
+                                    valid = !!(savedData[name] && savedData[name].toString().trim() !== '');
+                                }
+                                console.log(`[Validation][Step ${stepIdx}] [required-if-visible] Field: ${name}, Type: ${liveInput ? liveInput.type : 'unknown'}, Visible: ${isVisible}, Valid: ${valid}, Value:`, savedData[name]);
+                                if (!valid) isValid = false;
+                            } else {
+                                console.log(`[Validation][Step ${stepIdx}] [required-if-visible] Field: ${name} is not visible, skipping validation.`);
                             }
                         });
                     });
 
+                    console.log('[Validation] Final isValid:', isValid);
                     return isValid;
                 } catch (e) {
                     console.error('Validation check failed:', e);
@@ -682,6 +700,10 @@ function render_forms_by_dan_form($atts) {
                         value: el.value
                     }));
                     console.log('Required fields at this step:', requiredFields);
+                    if (!allStepsValid()) {
+                        alert('Please complete all required fields before continuing.');
+                        return;
+                    }
                     if (!form.checkValidity()) {
                         form.reportValidity();
                         return;
@@ -693,6 +715,10 @@ function render_forms_by_dan_form($atts) {
 
                 document.getElementById('formsByDanForm').onsubmit = e => {
                     e.preventDefault();
+                    if (!allStepsValid()) {
+                        alert('Please complete all required fields before submitting.');
+                        return;
+                    }
                     const form = document.getElementById('formsByDanForm');
                     const fileInputs = form.querySelectorAll('input[type="file"]');
                     const readPromises = [];

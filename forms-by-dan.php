@@ -455,7 +455,7 @@ function render_forms_by_dan_form($atts) {
                     const savedData = JSON.parse(localStorage.getItem('multiStepFormData') || '{}');
                     let isValid = true;
 
-                    console.log('[Validation] Starting validation for all steps...');
+                    // console.log('[Validation] Starting validation for all steps...');
                     formStepsData.forEach((step, stepIdx) => {
                         const parser = new DOMParser();
                         const doc = parser.parseFromString(step.html, 'text/html');
@@ -471,7 +471,7 @@ function render_forms_by_dan_form($atts) {
                             } else {
                                 valid = !!(savedData[name] && savedData[name].toString().trim() !== '');
                             }
-                            console.log(`[Validation][Step ${stepIdx}] [required] Field: ${name}, Type: ${el.type}, Valid: ${valid}, Value:`, savedData[name]);
+                            // console.log(`[Validation][Step ${stepIdx}] [required] Field: ${name}, Type: ${el.type}, Valid: ${valid}, Value:`, savedData[name]);
                             if (!valid) isValid = false;
                         });
                         // Validate all .required-if-visible fields that are visible
@@ -511,15 +511,15 @@ function render_forms_by_dan_form($atts) {
                                 } else {
                                     valid = !!(savedData[name] && savedData[name].toString().trim() !== '');
                                 }
-                                console.log(`[Validation][Step ${stepIdx}] [required-if-visible] Field: ${name}, Type: ${liveInput ? liveInput.type : 'unknown'}, Visible: ${isVisible}, Valid: ${valid}, Value:`, savedData[name]);
+                                // console.log(`[Validation][Step ${stepIdx}] [required-if-visible] Field: ${name}, Type: ${liveInput ? liveInput.type : 'unknown'}, Visible: ${isVisible}, Valid: ${valid}, Value:`, savedData[name]);
                                 if (!valid) isValid = false;
                             } else {
-                                console.log(`[Validation][Step ${stepIdx}] [required-if-visible] Field: ${name} is not visible, skipping validation.`);
+                                // console.log(`[Validation][Step ${stepIdx}] [required-if-visible] Field: ${name} is not visible, skipping validation.`);
                             }
                         });
                     });
 
-                    console.log('[Validation] Final isValid:', isValid);
+                    // console.log('[Validation] Final isValid:', isValid);
                     return isValid;
                 } catch (e) {
                     console.error('Validation check failed:', e);
@@ -745,13 +745,13 @@ function render_forms_by_dan_form($atts) {
                 if (currentStep === formSteps.length - 1) {
                     const saved = JSON.parse(localStorage.getItem(storageKey) || '{}');
                     const anyClaimed = !!(saved['creditMonitoring'] || saved['claimOrdinary'] || saved['claimTime'] || saved['claimExtraordinary']);
-                    console.log('Benefit claim status:', {
-                        creditMonitoring: saved['creditMonitoring'],
-                        claimOrdinary: saved['claimOrdinary'],
-                        claimTime: saved['claimTime'],
-                        claimExtraordinary: saved['claimExtraordinary'],
-                        anyClaimed
-                    });
+                    // console.log('Benefit claim status:', {
+                    //     creditMonitoring: saved['creditMonitoring'],
+                    //     claimOrdinary: saved['claimOrdinary'],
+                    //     claimTime: saved['claimTime'],
+                    //     claimExtraordinary: saved['claimExtraordinary'],
+                    //     anyClaimed
+                    // });
                     const warning = document.getElementById('benefitWarning');
                     if (warning) {
                         if (!anyClaimed) {
@@ -776,7 +776,6 @@ function render_forms_by_dan_form($atts) {
                         type: el.type,
                         value: el.value
                     }));
-                    console.log('Required fields at this step:', requiredFields);
                     if (!allStepsValid()) {
                         alert('Please complete all required fields before continuing.');
                         return;

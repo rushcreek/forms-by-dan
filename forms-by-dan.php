@@ -168,10 +168,15 @@ function render_forms_by_dan_form($atts) {
             box-shadow: 0 0 0 2px #e6f2fa;
         }
         .claims-section input[type="checkbox"] {
-            width: auto !important;
+            width: 24px !important;
             margin: 0 8px 0 0 !important;
             accent-color: #0073aa;
         }
+        .claims-section input[type="checkbox"]::after {
+            content: none !important;
+        }
+
+        
         .claims-section label {
             display: flex;
             align-items: center;
@@ -233,34 +238,33 @@ function render_forms_by_dan_form($atts) {
             border-radius: 5px;
         }
         .file-list {
+            margin-top: 6px;
             margin-bottom: 10px;
+            display: block;
+            width: 100%;
         }
         .file-entry {
-            display: flex;
-            align-items: center;
-            margin-bottom: 4px;
+            display: block;
+            margin-bottom: 2px;
             font-size: 15px;
             color: #2d3a4a;
+            word-break: break-word;
+            white-space: normal;
+            width: 100%;
         }
-        .file-entry button.delete-file-btn {
-            color: #fff;
-            background: #d00;
-            border: none;
-            border-radius: 50%;
-            width: 20px;
-            height: 20px;
-            font-size: 14px;
-            line-height: 16px;
-            vertical-align: middle;
+        .file-entry .delete-file-x {
+            color: #d00;
+            font-size: 18px;
+            font-weight: bold;
             margin-left: 8px;
             cursor: pointer;
-            padding: 0;
-            display: flex;
-            align-items: center;
-            justify-content: center;
+            background: none;
+            border: none;
+            padding: 0 4px;
+            line-height: 1;
         }
-        .file-entry button.delete-file-btn:hover {
-            background: #a00;
+        .file-entry .delete-file-x:hover {
+            color: #a00;
         }
         .hidden { display: none; }
     </style>
@@ -343,7 +347,8 @@ function render_forms_by_dan_form($atts) {
                 if (!fileListDiv) {
                     fileListDiv = document.createElement('div');
                     fileListDiv.className = 'file-list';
-                    input.parentElement.appendChild(fileListDiv);
+                    // Insert file list directly after the file input
+                    input.parentElement.insertBefore(fileListDiv, input.nextSibling);
                 }
                 fileListDiv.innerHTML = '';
                 const files = (savedFiles && savedFiles[key]) ? savedFiles[key] : [];
@@ -351,15 +356,15 @@ function render_forms_by_dan_form($atts) {
                     files.forEach((file, idx) => {
                         const fileDiv = document.createElement('div');
                         fileDiv.className = 'file-entry';
-                        fileDiv.innerHTML = `<span>${file.name}</span> <button type="button" class="delete-file-btn" style="color:#fff;background:#d00;border:none;border-radius:50%;width:20px;height:20px;font-size:14px;line-height:16px;vertical-align:middle;margin-left:8px;cursor:pointer;padding:0;" title="Delete file" data-key="${key}" data-idx="${idx}">×</button>`;
+                        fileDiv.innerHTML = `<span>${file.name}</span><span class="delete-file-x" title="Delete file" data-key="${key}" data-idx="${idx}">×</span>`;
                         fileListDiv.appendChild(fileDiv);
                     });
                 }
                 // Attach delete handlers
-                fileListDiv.querySelectorAll('.delete-file-btn').forEach(btn => {
-                    btn.onclick = function() {
-                        const key = btn.getAttribute('data-key');
-                        const idx = parseInt(btn.getAttribute('data-idx'), 10);
+                fileListDiv.querySelectorAll('.delete-file-x').forEach(x => {
+                    x.onclick = function() {
+                        const key = x.getAttribute('data-key');
+                        const idx = parseInt(x.getAttribute('data-idx'), 10);
                         if (savedFiles[key]) {
                             savedFiles[key].splice(idx, 1);
                             if (savedFiles[key].length === 0) delete savedFiles[key];
@@ -462,6 +467,12 @@ function render_forms_by_dan_form($atts) {
                 const isLastStep = (typeof formSteps !== 'undefined') && (typeof currentStep !== 'undefined') && (currentStep === formSteps.length - 1);
                 const isValid = allStepsValid();
                 submitBtn.disabled = !(isLastStep && isValid);
+
+                // Disable next button on last step
+                const nextBtn = document.getElementById('nextBtn');
+                if (nextBtn) {
+                    nextBtn.disabled = (typeof formSteps !== 'undefined') && (typeof currentStep !== 'undefined') && (currentStep === formSteps.length - 1);
+                }
             }
 
             // Add this function before renderForm
@@ -482,310 +493,6 @@ function render_forms_by_dan_form($atts) {
                     });
                 }
                 return warnings;
-            }
-
-            function renderForm() {
-                const step = formSteps[currentStep];
-                const instructionHtml = step.instruction ? `<div class="form-instruction">${step.instruction}</div>` : '';
-                const stepContent = step.html;
-                const wrappedContent = `<div class="claims-section">${instructionHtml}${stepContent}</div>`;
-                let summaryHtml = '';
-                if (currentStep === formSteps.length - 1) {
-                    const saved = JSON.parse(localStorage.getItem(storageKey) || '{}');
-                    // Get form config (with warnings) from the JSON definition
-                    let formConfig = {};
-                    try {
-                        formConfig = JSON.parse(document.getElementById('forms-by-dan-definition').textContent.replace(/&quot;/g, '"'));
-                        if (Array.isArray(formConfig)) formConfig = { steps: formConfig }; // fallback for old format
-                    } catch (e) { formConfig = {}; }
-                    // Build a summary of all filled fields, checked boxes, selected files, etc.
-                    const form = document.createElement('form');
-                    // Combine all step HTML to get all fields
-                    formSteps.forEach(s => {
-                        const tempDiv = document.createElement('div');
-                        tempDiv.innerHTML = s.html;
-                        Array.from(tempDiv.children).forEach(child => form.appendChild(child.cloneNode(true)));
-                    });
-                    // Find all inputs, selects, textareas
-                    const allFields = form.querySelectorAll('input, select, textarea');
-                    let summaryList = '';
-                    allFields.forEach(field => {
-                        const key = field.name || field.id;
-                        if (!key) return;
-                        let label = '';
-                        // For select fields, get the label from the parent label element, not the option text
-                        if (field.tagName && field.tagName.toLowerCase() === 'select') {
-                            // Try to find a label that is the parent of the select
-                            if (field.parentElement && field.parentElement.tagName.toLowerCase() === 'label') {
-                                label = field.parentElement.textContent.trim();
-                                // Remove the text of all child options from the label
-                                Array.from(field.options).forEach(opt => {
-                                    label = label.replace(opt.text, '').trim();
-                                });
-                            } else {
-                                // Fallback to previous logic
-                                const labelEl = form.querySelector(`label[for="${field.id}"]`) || (field.closest('label'));
-                                label = labelEl ? labelEl.textContent.trim() : key;
-                            }
-                        } else {
-                            // Non-select fields: use previous logic
-                            const labelEl = form.querySelector(`label[for="${field.id}"]`) || (field.closest('label'));
-                            label = labelEl ? labelEl.textContent.trim() : key;
-                        }
-                        if (field.type === 'checkbox') {
-                            if (saved[key]) {
-                                summaryList += `<li>${label}: Checked</li>`;
-                            }
-                        } else if (field.type === 'file') {
-                            if (saved.files && saved.files[key] && saved.files[key].length > 0) {
-                                const fileNames = saved.files[key].map(f => f.name).join(', ');
-                                summaryList += `<li>${label}: ${fileNames}</li>`;
-                            }
-                        } else if (field.tagName && field.tagName.toLowerCase() === 'select') {
-                            // Only show if a real value is selected
-                            if (saved[key] && saved[key] !== '' && saved[key] !== '--Select--') {
-                                // Find the selected option's text from the DOM, fallback to value
-                                let selectedText = saved[key];
-                                if (field.options && field.options.length > 0) {
-                                    for (let i = 0; i < field.options.length; i++) {
-                                        if (field.options[i].value == saved[key]) {
-                                            selectedText = field.options[i].text;
-                                            break;
-                                        }
-                                    }
-                                }
-                                summaryList += `<li>${label}: ${selectedText}</li>`;
-                            }
-                        } else if (field.type === 'radio') {
-                            if (saved[key] && field.value === saved[key]) {
-                                summaryList += `<li>${label}: ${field.value}</li>`;
-                            }
-                        } else {
-                            if (saved[key] && saved[key].toString().trim() !== '') {
-                                summaryList += `<li>${label}: ${saved[key]}</li>`;
-                            }
-                        }
-                    });
-                    summaryHtml = `<div class="summary-section"><h3>Summary of Your Submission:</h3><ul>${summaryList}</ul></div>`;
-                    // Custom warnings from JSON
-                    const customWarnings = getCustomWarnings(saved, formConfig);
-                    customWarnings.forEach(msg => {
-                        summaryHtml += `<div class="error-message">${msg}</div>`;
-                    });
-                }
-
-                formRoot.innerHTML = `
-                    <form id="formsByDanForm" enctype="multipart/form-data" method="POST">
-                        <h2>${step.title}</h2>
-                        ${wrappedContent}
-                        ${summaryHtml}
-                        <div class="form-navigation">
-                            <button type="button" id="prevBtn">Back</button>
-                            <button type="button" id="nextBtn">Next</button>
-                            <button type="submit" id="submitBtn">Submit</button>
-                        </div>
-                    </form>`;
-
-                // Inject query parameters into hidden inputs
-                const form = document.getElementById('formsByDanForm');
-                const params = new URLSearchParams(window.location.search);
-                ['id', 'lastName', 'salt', 'token'].forEach(name => {
-                    let input = form.querySelector(`input[name="${name}"]`);
-                    if (!input) {
-                        input = document.createElement('input');
-                        input.type = 'hidden';
-                        input.name = name;
-                        form.appendChild(input);
-                    }
-                    input.value = params.get(name) || '';
-                });
-                // Inject pid as hidden field
-                let pid = '';
-                const pidEl = document.getElementById('forms-by-dan-pid');
-                if (pidEl) pid = pidEl.textContent.trim();
-                let pidInput = form.querySelector('input[name="pid"]');
-                if (!pidInput) {
-                    pidInput = document.createElement('input');
-                    pidInput.type = 'hidden';
-                    pidInput.name = 'pid';
-                    form.appendChild(pidInput);
-                }
-                pidInput.value = pid;
-
-                loadProgress();
-                updateSubmitButtonState();
-
-                // Remove logic that disables submit button based on current step's validation
-                // const submitBtn = document.getElementById('submitBtn');
-                // submitBtn.disabled = true;
-
-                const inputs = document.querySelectorAll('input, select, textarea');
-                inputs.forEach(el => {
-                    el.addEventListener('input', () => {
-                        updateSubmitButtonState();
-                        saveProgress(); // also save state as user fills it out
-                    });
-                    if (el.type === 'checkbox') {
-                        el.addEventListener('change', updateSubmitButtonState);
-                    }
-                    if (el.type === 'file') {
-                        // Always allow multiple for flow, but only one at a time
-                        el.setAttribute('multiple', 'multiple');
-                        el.addEventListener('change', handleFileInputChange);
-                        renderFileListForInput(el);
-                    }
-                });
-
-                if (currentStep === formSteps.length - 1) {
-                    const saved = JSON.parse(localStorage.getItem(storageKey) || '{}');
-                    const anyClaimed = !!(saved['creditMonitoring'] || saved['claimOrdinary'] || saved['claimTime'] || saved['claimExtraordinary']);
-                    console.log('Benefit claim status:', {
-                        creditMonitoring: saved['creditMonitoring'],
-                        claimOrdinary: saved['claimOrdinary'],
-                        claimTime: saved['claimTime'],
-                        claimExtraordinary: saved['claimExtraordinary'],
-                        anyClaimed
-                    });
-                    const warning = document.getElementById('benefitWarning');
-                    if (warning) {
-                        if (!anyClaimed) {
-                            warning.classList.remove('hidden');
-                        } else {
-                            warning.classList.add('hidden');
-                        }
-                    }
-                }
-
-                document.getElementById('prevBtn').onclick = () => {
-                    saveProgress();
-                    if (currentStep > 0) currentStep--;
-                    renderForm();
-                };
-
-                document.getElementById('nextBtn').onclick = () => {
-                    const form = document.getElementById('formsByDanForm');
-                    // Log all required fields for this step
-                    const requiredFields = Array.from(form.querySelectorAll('[required]')).map(el => ({
-                        name: el.name || el.id,
-                        type: el.type,
-                        value: el.value
-                    }));
-                    console.log('Required fields at this step:', requiredFields);
-                    if (!form.checkValidity()) {
-                        form.reportValidity();
-                        return;
-                    }
-                    saveProgress();
-                    currentStep++;
-                    renderForm();
-                };
-
-                document.getElementById('formsByDanForm').onsubmit = e => {
-                    e.preventDefault();
-                    const form = document.getElementById('formsByDanForm');
-                    const fileInputs = form.querySelectorAll('input[type="file"]');
-                    const readPromises = [];
-                    fileInputs.forEach(input => {
-                        const key = input.name || input.id;
-                        if (!key) return;
-                        if (!input.files || input.files.length === 0) {
-                            delete savedFiles[key];
-                            return;
-                        }
-                        savedFiles[key] = [];
-                        for (let i = 0; i < input.files.length; i++) {
-                            const file = input.files[i];
-                            const reader = new FileReader();
-                            const p = new Promise(resolve => {
-                                reader.onload = () => {
-                                    savedFiles[key].push({
-                                        name: file.name,
-                                        type: file.type,
-                                        data: reader.result.split(',')[1]
-                                    });
-                                    resolve();
-                                };
-                            });
-                            reader.readAsDataURL(file);
-                            readPromises.push(p);
-                        }
-                    });
-                    Promise.all(readPromises).then(() => {
-                        saveProgress();
-                        const savedData = JSON.parse(localStorage.getItem(storageKey) || '{}');
-                        savedData.files = savedFiles;
-                        const redirectUrlEl = document.getElementById('forms-by-dan-redirect-url');
-                        const redirectUrl = redirectUrlEl ? redirectUrlEl.textContent.trim() : '';
-                        fetch(document.getElementById('forms-by-dan-webhook-url').textContent.trim(), {
-                            method: 'POST',
-                            headers: {
-                                'Content-Type': 'application/json',
-                                'Ocp-Apim-Subscription-Key': document.getElementById('forms-by-dan-api-key').textContent.trim()
-                            },
-                            body: JSON.stringify(savedData),
-                            redirect: 'manual'
-                        }).then(response => {
-                            if (response.status === 302 || response.status === 301) {
-                                const location = response.headers.get('Location');
-                                if (location) {
-                                    window.location.href = location;
-                                    return;
-                                }
-                            }
-                            if (redirectUrl) {
-                                window.location.href = redirectUrl;
-                            } else {
-                                alert('Submitted');
-                            }
-                        }).catch(() => alert('Submission failed.'));
-                    });
-                };
-
-                attachConditionalHandlers();
-                updateSubmitButtonState();
-            }
-
-            // In attachConditionalHandlers, support data-toggle-target attribute for checkboxes
-            function attachConditionalHandlers() {
-                const checkboxes = document.querySelectorAll('input[type="checkbox"][data-toggle-target]');
-                checkboxes.forEach(box => {
-                    const targetSelector = box.getAttribute('data-toggle-target');
-                    if (!targetSelector) return;
-                    const targets = document.querySelectorAll(targetSelector);
-                    box.onchange = () => {
-                        targets.forEach(div => {
-                            div.classList.toggle('hidden', !box.checked);
-                        });
-                    };
-                    // Initial state
-                    box.dispatchEvent(new Event('change'));
-                });
-                const toggle = (id, fields, required = []) => {
-                    const box = document.getElementById(id);
-                    const div = document.getElementById(fields);
-                    if (!box || !div) return;
-                    box.onchange = () => {
-                        div.classList.toggle('hidden', !box.checked);
-                        required.forEach(name => {
-                            const input = document.querySelector(`[name="${name}"]`);
-                            if (input) input.required = box.checked;
-                        });
-                    };
-                    box.dispatchEvent(new Event('change'));
-                };
-                toggle('claimOrdinary', 'ordinaryFields', ['ordinaryAmount', 'ordinaryExplanation']);
-                toggle('claimTime', 'timeFields', ['hoursSpent', 'timeDescription']);
-                toggle('claimExtraordinary', 'extraFields', ['extraAmount', 'extraExplanation']);
-
-                const noEmail = document.getElementById('noEmail');
-                const email = document.querySelector('input[name="email"]');
-                if (noEmail && email) {
-                    noEmail.onchange = () => {
-                        email.required = !noEmail.checked;
-                        email.closest('label').style.display = noEmail.checked ? 'none' : 'block';
-                    };
-                    noEmail.dispatchEvent(new Event('change'));
-                }
             }
 
             function renderForm() {

@@ -292,9 +292,59 @@ function render_forms_by_dan_form($atts) {
                 const form = document.getElementById('formsByDanForm');
                 const inputs = form.querySelectorAll('input, select, textarea');
                 const data = JSON.parse(localStorage.getItem(storageKey) || '{}');
+                // Track which fields are required-if-visible and not visible
+                const requiredIfVisibleInputs = form.querySelectorAll('.required-if-visible');
+                requiredIfVisibleInputs.forEach(input => {
+                    // Only remove if not visible
+                    let node = input;
+                    let isVisible = true;
+                    while (node) {
+                        if (node.classList && node.classList.contains('hidden')) {
+                            isVisible = false;
+                            break;
+                        }
+                        const style = window.getComputedStyle(node);
+                        if (style.display === 'none' || style.visibility === 'hidden' || style.opacity === '0') {
+                            isVisible = false;
+                            break;
+                        }
+                        node = node.parentElement;
+                    }
+                    const key = input.name || input.id;
+                    if (!isVisible && key) {
+                        // Remove from data if not visible
+                        delete data[key];
+                        if (input.type === 'file') {
+                            if (data.files && data.files[key]) {
+                                delete data.files[key];
+                            }
+                            if (savedFiles && savedFiles[key]) {
+                                delete savedFiles[key];
+                            }
+                        }
+                    }
+                });
                 inputs.forEach(input => {
                     const key = input.name || input.id;
                     if (!key) return;
+                    // Skip required-if-visible fields if not visible (already handled above)
+                    if (input.classList && input.classList.contains('required-if-visible')) {
+                        let node = input;
+                        let isVisible = true;
+                        while (node) {
+                            if (node.classList && node.classList.contains('hidden')) {
+                                isVisible = false;
+                                break;
+                            }
+                            const style = window.getComputedStyle(node);
+                            if (style.display === 'none' || style.visibility === 'hidden' || style.opacity === '0') {
+                                isVisible = false;
+                                break;
+                            }
+                            node = node.parentElement;
+                        }
+                        if (!isVisible) return;
+                    }
                     if (input.type === 'checkbox') {
                         data[key] = input.checked;
                     } else if (input.type !== 'file') {
@@ -541,6 +591,33 @@ function render_forms_by_dan_form($atts) {
                     allFields.forEach(field => {
                         const key = field.name || field.id;
                         if (!key) return;
+                        // If this is a required-if-visible field, only include if visible in the live DOM
+                        if (field.classList && field.classList.contains('required-if-visible')) {
+                            // Try to find the live input in the DOM
+                            const liveForm = document.getElementById('formsByDanForm');
+                            let liveInput = null;
+                            if (liveForm) {
+                                liveInput = liveForm.querySelector(`[name="${key}"]`) || liveForm.querySelector(`#${key}`);
+                            }
+                            let isVisible = false;
+                            if (liveInput) {
+                                let node = liveInput;
+                                isVisible = true;
+                                while (node) {
+                                    if (node.classList && node.classList.contains('hidden')) {
+                                        isVisible = false;
+                                        break;
+                                    }
+                                    const style = window.getComputedStyle(node);
+                                    if (style.display === 'none' || style.visibility === 'hidden' || style.opacity === '0') {
+                                        isVisible = false;
+                                        break;
+                                    }
+                                    node = node.parentElement;
+                                }
+                            }
+                            if (!isVisible) return;
+                        }
                         let label = '';
                         // For select fields, get the label from the parent label element, not the option text
                         if (field.tagName && field.tagName.toLowerCase() === 'select') {

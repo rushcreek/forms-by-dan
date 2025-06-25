@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Forms by Dan
  * Description: Embed a multi-step ACEN claim form into pages and posts using the [forms_by_dan] shortcode.
- * Version: 1.0
+ * Version: 1.5
  * Author: Dan Wegner
  */
 
@@ -454,8 +454,8 @@ function render_forms_by_dan_form($atts) {
                     }
                     const savedData = JSON.parse(localStorage.getItem('multiStepFormData') || '{}');
                     let isValid = true;
+                    let groupCheckboxErrors = {};
 
-                    // console.log('[Validation] Starting validation for all steps...');
                     formStepsData.forEach((step, stepIdx) => {
                         const parser = new DOMParser();
                         const doc = parser.parseFromString(step.html, 'text/html');
@@ -471,7 +471,6 @@ function render_forms_by_dan_form($atts) {
                             } else {
                                 valid = !!(savedData[name] && savedData[name].toString().trim() !== '');
                             }
-                            // console.log(`[Validation][Step ${stepIdx}] [required] Field: ${name}, Type: ${el.type}, Valid: ${valid}, Value:`, savedData[name]);
                             if (!valid) isValid = false;
                         });
                         // Validate all .required-if-visible fields that are visible
@@ -511,15 +510,68 @@ function render_forms_by_dan_form($atts) {
                                 } else {
                                     valid = !!(savedData[name] && savedData[name].toString().trim() !== '');
                                 }
-                                // console.log(`[Validation][Step ${stepIdx}] [required-if-visible] Field: ${name}, Type: ${liveInput ? liveInput.type : 'unknown'}, Visible: ${isVisible}, Valid: ${valid}, Value:`, savedData[name]);
                                 if (!valid) isValid = false;
-                            } else {
-                                // console.log(`[Validation][Step ${stepIdx}] [required-if-visible] Field: ${name} is not visible, skipping validation.`);
+                            }
+                        });
+
+                        // Group checkbox validation: require at least one checked per group
+                        const groupCheckboxes = doc.querySelectorAll('input[type="checkbox"][data-group]');
+                        const groupMap = {};
+                        groupCheckboxes.forEach(cb => {
+                            const group = cb.getAttribute('data-group');
+                            if (!group) return;
+                            if (!groupMap[group]) groupMap[group] = [];
+                            groupMap[group].push(cb);
+                        });
+                        Object.keys(groupMap).forEach(group => {
+                            // Find all checkboxes in this group in the live DOM
+                            const form = document.getElementById('formsByDanForm');
+                            const liveCheckboxes = form ? Array.from(form.querySelectorAll(`input[type="checkbox"][data-group="${group}"]`)) : [];
+                            // Only consider visible checkboxes
+                            const visibleCheckboxes = liveCheckboxes.filter(cb => {
+                                let node = cb;
+                                let isVisible = true;
+                                while (node) {
+                                    if (node.classList && node.classList.contains('hidden')) {
+                                        isVisible = false;
+                                        break;
+                                    }
+                                    const style = window.getComputedStyle(node);
+                                    if (style.display === 'none' || style.visibility === 'hidden' || style.opacity === '0') {
+                                        isVisible = false;
+                                        break;
+                                    }
+                                    node = node.parentElement;
+                                }
+                                return isVisible;
+                            });
+                            // At least one must be checked
+                            const anyChecked = visibleCheckboxes.some(cb => cb.checked);
+                            if (visibleCheckboxes.length > 0 && !anyChecked) {
+                                isValid = false;
+                                groupCheckboxErrors[group] = true;
                             }
                         });
                     });
 
-                    // console.log('[Validation] Final isValid:', isValid);
+                    // Show/hide group checkbox error messages in the UI
+                    const form = document.getElementById('formsByDanForm');
+                    if (form) {
+                        // Remove old group error messages
+                        form.querySelectorAll('.group-checkbox-error-message').forEach(el => el.remove());
+                        // For each group with error, show a message after the last checkbox in the group
+                        Object.keys(groupCheckboxErrors).forEach(group => {
+                            const checkboxes = form.querySelectorAll(`input[type="checkbox"][data-group="${group}"]`);
+                            if (checkboxes.length > 0) {
+                                const last = checkboxes[checkboxes.length - 1];
+                                const msg = document.createElement('div');
+                                msg.className = 'error-message group-checkbox-error-message';
+                                msg.textContent = 'Please select at least one option.';
+                                last.parentElement.appendChild(msg);
+                            }
+                        });
+                    }
+
                     return isValid;
                 } catch (e) {
                     console.error('Validation check failed:', e);
@@ -704,6 +756,11 @@ function render_forms_by_dan_form($atts) {
                         form.appendChild(input);
                     }
                     input.value = params.get(name) || '';
+                    // Make lastName read-only if it is a visible input
+                    if (name === 'lastName') {
+                        input.readOnly = true;
+                        input.type = 'text'; // Ensure it's visible if not already
+                    }
                 });
                 // Inject pid as hidden field
                 let pid = '';
@@ -911,3 +968,9 @@ function render_forms_by_dan_form($atts) {
     <?php
     return ob_get_clean();
 }
+
+// Admin notice for Atticus Form Tool JSONer link
+add_action('admin_notices', function() {
+    if (!is_admin()) return;
+    echo '<div class="notice notice-info" style="margin-top:20px;"><strong><a href="https://chatgpt.com/g/g-683891e9fe208191964005c5e2c0fa4e-atticus-form-tool-jsoner" target="_blank" rel="noopener" style="font-size:1.15em;">Atticus Form Tool JSONer &rarr;</a></strong></div>';
+});

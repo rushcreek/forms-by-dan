@@ -69,6 +69,13 @@ function render_forms_by_dan_meta_box($post) {
     echo '<input type="text" id="forms_by_dan_shortcode" value="[forms_by_dan id=' . esc_attr($post->ID) . ']" readonly style="width:100%;">';
     echo '<button type="button" class="button" onclick="navigator.clipboard.writeText(document.getElementById(\'forms_by_dan_shortcode\').value)">Copy to Clipboard</button></p>';
 }
+// Allow unfiltered HTML in the signin form.
+add_action('admin_init', function() {
+    $role = get_role('editor'); // Or any role you're targeting
+    if ($role) {
+        $role->add_cap('unfiltered_html');
+    }
+});
 
 // Save custom fields
 add_action('save_post', function ($post_id) {
@@ -895,6 +902,7 @@ function render_forms_by_dan_form($atts) {
                             body: JSON.stringify(savedData),
                             redirect: 'manual'
                         }).then(response => {
+                            // Only redirect or show a static message; never use response body to re-render the form
                             if (response.status === 302 || response.status === 301) {
                                 const location = response.headers.get('Location');
                                 if (location) {
@@ -905,9 +913,13 @@ function render_forms_by_dan_form($atts) {
                             if (redirectUrl) {
                                 window.location.href = redirectUrl;
                             } else {
-                                alert('Submitted');
+                                // Show a static success message (do not re-render form with response body)
+                                formRoot.innerHTML = '<div class="form-instruction" style="color:green;font-size:1.2em;">Thank you! Your submission has been received.</div>';
+                                localStorage.removeItem(storageKey);
                             }
-                        }).catch(() => alert('Submission failed.'));
+                        }).catch(() => {
+                            alert('Submission failed.');
+                        });
                     });
                 };
 

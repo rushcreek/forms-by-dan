@@ -129,7 +129,6 @@ function render_forms_by_dan_form($atts) {
     ob_start();
     ?>
     <div id="formsByDanRoot"></div>
-<script type="application/json" id="forms-by-dan-definition"><?php echo $form_json; ?></script>
 <script type="text/plain" id="forms-by-dan-webhook-url"><?php echo $webhook_url; ?></script>
 <script type="text/plain" id="forms-by-dan-api-key"><?php echo $api_key; ?></script>
 <script type="text/plain" id="forms-by-dan-redirect-url"><?php echo $redirect_url; ?></script>
@@ -278,10 +277,23 @@ function render_forms_by_dan_form($atts) {
     <script>
     document.addEventListener('DOMContentLoaded', function () {
         const formRoot = document.getElementById('formsByDanRoot');
-        let formStepsRaw = document.getElementById('forms-by-dan-definition').textContent;
+        // Only use localStorage for form JSON. If not present, show error and stop.
+        let formStepsRaw = null;
+        let formConfig = null;
+        // 1. Check localStorage ONLY
+        try {
+            const localJson = localStorage.getItem('formsByDanFormJson');
+            if (localJson) {
+                formStepsRaw = localJson;
+            }
+        } catch (e) {}
+        if (!formStepsRaw) {
+            formRoot.innerHTML = "<p style='color: red;'>No form JSON found in localStorage. Please set 'formsByDanFormJson' in localStorage to render the form.</p>";
+            return;
+        }
         try {
             formStepsRaw = formStepsRaw.replace(/&quot;/g, '"');
-            let formConfig = JSON.parse(formStepsRaw);
+            formConfig = JSON.parse(formStepsRaw);
             let formSteps, warnings;
             if (Array.isArray(formConfig)) {
                 formSteps = formConfig;

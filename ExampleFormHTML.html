@@ -1,0 +1,65 @@
+<!-- Example HTML form -->
+<form id="tokenForm">
+  <label for="id">User ID:</label>
+  <input type="text" id="id" name="id" required><br><br>
+
+  <input type="hidden" id="pid" name="pid" value="65">
+
+  <label for="lastName">Last Name:</label>
+  <input type="text" id="lastName" name="lastName" required><br><br>
+
+  <input type="hidden" name="redirectBaseUrl" value="https://newatticus.local/gpt-test/">
+
+  <button type="submit">Submit</button>
+</form>
+<pre id="output"></pre>
+
+<script>
+document.getElementById('tokenForm').onsubmit = async function(e) {
+    e.preventDefault();
+    const form = e.target;
+    const payload = {
+        id: form.id.value,
+        pid: form.pid.value,
+        lastName: form.lastName.value,
+        redirectBaseUrl: form.redirectBaseUrl.value
+    };
+
+    let response, data;
+    try {
+        response = await fetch('http://localhost:7072/api/generateToken', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+    } catch (networkErr) {
+        alert('Network error: ' + networkErr);
+        return;
+    }
+
+    // Try to parse JSON, fallback to text if not JSON
+    try {
+        data = await response.json();
+    } catch (e) {
+        const text = await response.text();
+        document.getElementById('output').textContent = 'Non-JSON response: ' + text;
+        alert('Non-JSON response: ' + text);
+        return;
+    }
+
+    // Store the returned form JSON in localStorage for the plugin
+    if (data && data.projectFormJson) {
+        localStorage.setItem('formsByDanFormJson', data.projectFormJson);
+        document.getElementById('output').textContent = 'Form JSON stored in localStorage. You may now proceed to the form page.';
+    } else {
+        alert('No form JSON found. Response: ' + JSON.stringify(data));
+        return;
+    }
+
+    // Redirect if redirectUrl is present
+    if (data.redirectUrl) {
+        window.location.href = data.redirectUrl;
+        return;
+    }
+};
+</script>

@@ -25,7 +25,7 @@ document.getElementById('tokenForm').onsubmit = async function(e) {
         redirectBaseUrl: form.redirectBaseUrl.value
     };
 
-    let response, data;
+    let response;
     try {
         response = await fetch('http://localhost:7072/api/generateToken', {
             method: 'POST',
@@ -37,17 +37,25 @@ document.getElementById('tokenForm').onsubmit = async function(e) {
         return;
     }
 
-    // Try to parse JSON, fallback to text if not JSON
+    let data;
     try {
-        data = await response.json();
+        // Only try to parse JSON if response is ok
+        if (response.ok) {
+            data = await response.json();
+        } else {
+            // If not ok, try to get error text once
+            const errorText = await response.text();
+            document.getElementById('output').textContent = 'Error: ' + errorText;
+            alert('Error: ' + errorText);
+            return;
+        }
     } catch (e) {
-        const text = await response.text();
-        document.getElementById('output').textContent = 'Non-JSON response: ' + text;
-        alert('Non-JSON response: ' + text);
+        document.getElementById('output').textContent = 'Failed to parse response.';
+        alert('Failed to parse response.');
         return;
     }
 
-    // Store the returned form JSON in localStorage for the plugin
+    // ...existing code to store JSON and redirect...
     if (data && data.projectFormJson) {
         localStorage.setItem('formsByDanFormJson', data.projectFormJson);
         document.getElementById('output').textContent = 'Form JSON stored in localStorage. You may now proceed to the form page.';
@@ -56,7 +64,6 @@ document.getElementById('tokenForm').onsubmit = async function(e) {
         return;
     }
 
-    // Redirect if redirectUrl is present
     if (data.redirectUrl) {
         window.location.href = data.redirectUrl;
         return;

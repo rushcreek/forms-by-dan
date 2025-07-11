@@ -467,10 +467,8 @@ function render_forms_by_dan_form($atts) {
 
             function allStepsValid() {
                 try {
-                    let formStepsData = JSON.parse(document.getElementById('forms-by-dan-definition').textContent.replace(/&quot;/g, '"'));
-                    if (!Array.isArray(formStepsData)) {
-                        formStepsData = formStepsData.steps;
-                    }
+                    // Use formConfig/steps from localStorage, not PHP-injected JSON
+                    let formStepsData = Array.isArray(formConfig) ? formConfig : formConfig.steps;
                     const savedData = JSON.parse(localStorage.getItem('multiStepFormData') || '{}');
                     let isValid = true;
                     let groupCheckboxErrors = {};

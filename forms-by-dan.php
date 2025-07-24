@@ -465,7 +465,7 @@ function render_forms_by_dan_form($atts) {
             }
 
 
-            function allStepsValid() {
+            function allStepsValid(validateAllSteps = false) {
                 try {
                     // Use formConfig/steps from localStorage, not PHP-injected JSON
                     let formStepsData = Array.isArray(formConfig) ? formConfig : formConfig.steps;
@@ -473,11 +473,27 @@ function render_forms_by_dan_form($atts) {
                     let isValid = true;
                     let groupCheckboxErrors = {};
 
-                    formStepsData.forEach((step, stepIdx) => {
+                    const maxStep = validateAllSteps ? formStepsData.length - 1 : currentStep;
+                    console.log('Validating steps up to step:', maxStep, 'Current step:', currentStep, 'Total steps:', formStepsData.length);
+
+                    // Only validate steps up to and including the current step (or all steps if validateAllSteps is true)
+                    for (let stepIdx = 0; stepIdx <= maxStep; stepIdx++) {
+                        const step = formStepsData[stepIdx];
                         const parser = new DOMParser();
                         const doc = parser.parseFromString(step.html, 'text/html');
-                        // Validate all [required] fields
                         const requiredElements = doc.querySelectorAll('[required]');
+                        const requiredIfVisibleElements = doc.querySelectorAll('.required-if-visible');
+                        const groupCheckboxes = doc.querySelectorAll('input[type="checkbox"][data-group]');
+
+                        console.log(`Step ${stepIdx}: required=${requiredElements.length}, required-if-visible=${requiredIfVisibleElements.length}, group-checkboxes=${groupCheckboxes.length}`);
+
+                        // If no required fields AND no group checkboxes in this step, skip validation for this step
+                        if (requiredElements.length === 0 && requiredIfVisibleElements.length === 0 && groupCheckboxes.length === 0) {
+                            console.log(`Skipping validation for step ${stepIdx} - no validation requirements`);
+                            continue;
+                        }
+
+                        // Validate all [required] fields
                         requiredElements.forEach(el => {
                             const name = el.name || el.id;
                             let valid = true;
@@ -488,10 +504,12 @@ function render_forms_by_dan_form($atts) {
                             } else {
                                 valid = !!(savedData[name] && savedData[name].toString().trim() !== '');
                             }
-                            if (!valid) isValid = false;
+                            if (!valid) {
+                                console.log(`Step ${stepIdx}: Required field "${name}" (type: ${el.type}) is invalid. Value:`, savedData[name]);
+                                isValid = false;
+                            }
                         });
                         // Validate all .required-if-visible fields that are visible
-                        const requiredIfVisibleElements = doc.querySelectorAll('.required-if-visible');
                         requiredIfVisibleElements.forEach(el => {
                             const name = el.name || el.id;
                             // Find the input in the live DOM by name or id
@@ -532,7 +550,6 @@ function render_forms_by_dan_form($atts) {
                         });
 
                         // Group checkbox validation: require at least one checked per group
-                        const groupCheckboxes = doc.querySelectorAll('input[type="checkbox"][data-group]');
                         const groupMap = {};
                         groupCheckboxes.forEach(cb => {
                             const group = cb.getAttribute('data-group');
@@ -569,7 +586,10 @@ function render_forms_by_dan_form($atts) {
                                 groupCheckboxErrors[group] = true;
                             }
                         });
-                    });
+                    }
+
+                    console.log('Final validation result:', isValid);
+                    console.log('Group checkbox errors:', groupCheckboxErrors);
 
                     // Show/hide group checkbox error messages in the UI
                     const form = document.getElementById('formsByDanForm');
@@ -602,7 +622,7 @@ function render_forms_by_dan_form($atts) {
                 if (!submitBtn || !form) return;
                 // Only enable submit button on the last step and if all steps are valid
                 const isLastStep = (typeof formSteps !== 'undefined') && (typeof currentStep !== 'undefined') && (currentStep === formSteps.length - 1);
-                const isValid = allStepsValid();
+                const isValid = isLastStep ? allStepsValid(true) : allStepsValid(false); // Validate all steps only on last step
                 submitBtn.disabled = !(isLastStep && isValid);
 
                 // Disable next button on last step
@@ -640,12 +660,9 @@ function render_forms_by_dan_form($atts) {
                 let summaryHtml = '';
                 if (currentStep === formSteps.length - 1) {
                     const saved = JSON.parse(localStorage.getItem(storageKey) || '{}');
-                    // Get form config (with warnings) from the JSON definition
-                    let formConfig = {};
-                    try {
-                        formConfig = JSON.parse(document.getElementById('forms-by-dan-definition').textContent.replace(/&quot;/g, '"'));
-                        if (Array.isArray(formConfig)) formConfig = { steps: formConfig }; // fallback for old format
-                    } catch (e) { formConfig = {}; }
+                    // Get form config from the already parsed formConfig variable
+                    let currentFormConfig = formConfig;
+                    if (Array.isArray(currentFormConfig)) currentFormConfig = { steps: currentFormConfig }; // fallback for old format
                     // Build a summary of all filled fields, checked boxes, selected files, etc.
                     const form = document.createElement('form');
                     // Combine all step HTML to get all fields
@@ -742,8 +759,8 @@ function render_forms_by_dan_form($atts) {
                         }
                     });
                     summaryHtml = `<div class="summary-section"><h3>Summary of Your Submission:</h3><ul>${summaryList}</ul></div>`;
-                    // Custom warnings from JSON
-                    const customWarnings = getCustomWarnings(saved, formConfig);
+                    // Custom warnings from JSON - use the already parsed formConfig
+                    const customWarnings = getCustomWarnings(saved, currentFormConfig);
                     customWarnings.forEach(msg => {
                         summaryHtml += `<div class="error-message">${msg}</div>`;
                     });
@@ -783,6 +800,13 @@ function render_forms_by_dan_form($atts) {
                 let pid = '';
                 const pidEl = document.getElementById('forms-by-dan-pid');
                 if (pidEl) pid = pidEl.textContent.trim();
+                // For static exports, try localStorage fallback
+                if (!pid) {
+                    try {
+                        const staticConfig = JSON.parse(localStorage.getItem('formsByDanStaticConfig') || '{}');
+                        pid = staticConfig.pid || '';
+                    } catch (e) {}
+                }
                 let pidInput = form.querySelector('input[name="pid"]');
                 if (!pidInput) {
                     pidInput = document.createElement('input');
@@ -865,7 +889,7 @@ function render_forms_by_dan_form($atts) {
 
                 document.getElementById('formsByDanForm').onsubmit = e => {
                     e.preventDefault();
-                    if (!allStepsValid()) {
+                    if (!allStepsValid(true)) { // Validate all steps before submission
                         alert('Please complete all required fields before submitting.');
                         return;
                     }
@@ -901,13 +925,32 @@ function render_forms_by_dan_form($atts) {
                         saveProgress();
                         const savedData = JSON.parse(localStorage.getItem(storageKey) || '{}');
                         savedData.files = savedFiles;
+                        // Get webhook configuration - try DOM elements first, then localStorage fallback
+                        let webhookUrl = '';
+                        let apiKey = '';
+                        let redirectUrl = '';
+                        const webhookUrlEl = document.getElementById('forms-by-dan-webhook-url');
+                        const apiKeyEl = document.getElementById('forms-by-dan-api-key');
                         const redirectUrlEl = document.getElementById('forms-by-dan-redirect-url');
-                        const redirectUrl = redirectUrlEl ? redirectUrlEl.textContent.trim() : '';
-                        fetch(document.getElementById('forms-by-dan-webhook-url').textContent.trim(), {
+                        
+                        if (webhookUrlEl) webhookUrl = webhookUrlEl.textContent.trim();
+                        if (apiKeyEl) apiKey = apiKeyEl.textContent.trim();
+                        if (redirectUrlEl) redirectUrl = redirectUrlEl.textContent.trim();
+                        
+                        // For static exports, try localStorage fallback
+                        if (!webhookUrl || !apiKey) {
+                            try {
+                                const staticConfig = JSON.parse(localStorage.getItem('formsByDanStaticConfig') || '{}');
+                                webhookUrl = webhookUrl || staticConfig.webhookUrl || '';
+                                apiKey = apiKey || staticConfig.apiKey || '';
+                                redirectUrl = redirectUrl || staticConfig.redirectUrl || '';
+                            } catch (e) {}
+                        }
+                        fetch(webhookUrl, {
                             method: 'POST',
                             headers: {
                                 'Content-Type': 'application/json',
-                                'Ocp-Apim-Subscription-Key': document.getElementById('forms-by-dan-api-key').textContent.trim()
+                                'Ocp-Apim-Subscription-Key': apiKey
                             },
                             body: JSON.stringify(savedData),
                             redirect: 'manual'

@@ -789,7 +789,19 @@ function render_forms_by_dan_form($atts) {
                         input.name = name;
                         form.appendChild(input);
                     }
-                    input.value = params.get(name) || '';
+                    let value = params.get(name) || '';
+                    
+                    // For lastName, also check localStorage
+                    if (name === 'lastName' && !value) {
+                        try {
+                            const localStorageLastName = localStorage.getItem('lastName');
+                            if (localStorageLastName) {
+                                value = localStorageLastName;
+                            }
+                        } catch (e) {}
+                    }
+                    
+                    input.value = value;
                     // Make lastName read-only if it is a visible input
                     if (name === 'lastName') {
                         input.readOnly = true;

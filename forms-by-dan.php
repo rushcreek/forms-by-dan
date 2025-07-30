@@ -757,6 +757,12 @@ function render_forms_by_dan_form($atts) {
                 if (nextBtn) {
                     nextBtn.disabled = (typeof formSteps !== 'undefined') && (typeof currentStep !== 'undefined') && (currentStep === formSteps.length - 1);
                 }
+                
+                // Disable back button on first step
+                const prevBtn = document.getElementById('prevBtn');
+                if (prevBtn) {
+                    prevBtn.disabled = (typeof currentStep !== 'undefined') && (currentStep === 0);
+                }
             }
 
             // Add this function before renderForm

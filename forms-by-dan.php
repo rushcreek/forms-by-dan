@@ -26,15 +26,25 @@ add_action('init', function() {
     ]);
 });
 
-// CORS: Allow requests from https://auth-webhook.azurewebsites.net
+// CORS: Allow requests from https://auth-webhook.azurewebsites.net and http://localhost:7072
 add_action('init', function() {
-    if (isset($_SERVER['HTTP_ORIGIN']) && strpos($_SERVER['HTTP_ORIGIN'], 'https://auth-webhook.azurewebsites.net') !== false) {
-        header('Access-Control-Allow-Origin: https://auth-webhook.azurewebsites.net');
-        header('Access-Control-Allow-Methods: POST, GET, OPTIONS');
-        header('Access-Control-Allow-Headers: Content-Type, Authorization');
-        if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
-            http_response_code(200);
-            exit();
+    $allowed_origins = [
+        'https://auth-webhook.azurewebsites.net',
+        'http://localhost:7072'
+    ];
+    
+    if (isset($_SERVER['HTTP_ORIGIN'])) {
+        $origin = $_SERVER['HTTP_ORIGIN'];
+        if (in_array($origin, $allowed_origins)) {
+            header('Access-Control-Allow-Origin: ' . $origin);
+            header('Access-Control-Allow-Methods: POST, GET, OPTIONS');
+            header('Access-Control-Allow-Headers: Content-Type, Authorization, Ocp-Apim-Subscription-Key');
+            header('Access-Control-Allow-Credentials: true');
+            
+            if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
+                http_response_code(200);
+                exit();
+            }
         }
     }
 });
@@ -277,6 +287,107 @@ function render_forms_by_dan_form($atts) {
     <script>
     document.addEventListener('DOMContentLoaded', function () {
         const formRoot = document.getElementById('formsByDanRoot');
+        
+        // Define authentication validation functions first
+        function validateAuthToken() {
+            try {
+                // Get authentication data from localStorage
+                const authToken = localStorage.getItem('authToken');
+                const tokenSalt = localStorage.getItem('tokenSalt');
+                const tokenExpiresAt = localStorage.getItem('tokenExpiresAt');
+                const tokenValidUntil = localStorage.getItem('tokenValidUntil');
+                
+                // Check if we have all required token data
+                if (!authToken || !tokenSalt || !tokenExpiresAt) {
+                    console.error('Missing authentication token data');
+                    return false;
+                }
+                
+                // Check if token has expired
+                const currentTime = Math.floor(Date.now() / 1000); // Current time in seconds
+                const expiresAt = parseInt(tokenExpiresAt, 10) / 1000; // Convert milliseconds to seconds
+                
+                // Handle tokenValidUntil - it might be a date string or timestamp
+                let validUntil = expiresAt; // Default to expiresAt
+                if (tokenValidUntil) {
+                    if (tokenValidUntil.includes('T')) {
+                        // It's a date string like "2025-07-29T19:00:09.742Z"
+                        validUntil = Math.floor(new Date(tokenValidUntil).getTime() / 1000);
+                    } else {
+                        // It's a timestamp
+                        validUntil = parseInt(tokenValidUntil, 10);
+                        if (validUntil > 9999999999) {
+                            // If it's in milliseconds, convert to seconds
+                            validUntil = Math.floor(validUntil / 1000);
+                        }
+                    }
+                }
+                
+                if (currentTime > expiresAt) {
+                    console.error('Token has expired', {
+                        currentTime,
+                        expiresAt,
+                        expired: currentTime > expiresAt
+                    });
+                    return false;
+                }
+                
+                if (currentTime > validUntil) {
+                    console.error('Token is no longer valid', {
+                        currentTime,
+                        validUntil,
+                        expired: currentTime > validUntil
+                    });
+                    return false;
+                }
+                
+                console.log('Token validation successful', {
+                    hasToken: !!authToken,
+                    hasSalt: !!tokenSalt,
+                    currentTime,
+                    expiresAt,
+                    validUntil,
+                    timeToExpiry: expiresAt - currentTime
+                });
+                
+                return true;
+            } catch (e) {
+                console.error('Token validation error:', e);
+                return false;
+            }
+        }
+
+        function validateAuthTokenExists() {
+            try {
+                // Get authentication data from localStorage
+                const authToken = localStorage.getItem('authToken');
+                const tokenSalt = localStorage.getItem('tokenSalt');
+                const tokenExpiresAt = localStorage.getItem('tokenExpiresAt');
+                
+                // Check if we have basic token data (lenient check for form load)
+                if (!authToken || !tokenSalt) {
+                    console.error('Missing basic authentication token data');
+                    return false;
+                }
+                
+                // If we have expiration data, check it
+                if (tokenExpiresAt) {
+                    const currentTime = Math.floor(Date.now() / 1000);
+                    const expiresAt = parseInt(tokenExpiresAt, 10) / 1000; // Convert milliseconds to seconds
+                    
+                    if (currentTime > expiresAt) {
+                        console.error('Token has expired on form load');
+                        return false;
+                    }
+                }
+                
+                return true;
+            } catch (e) {
+                console.error('Token existence check error:', e);
+                return false;
+            }
+        }
+        
         // Only use localStorage for form JSON. If not present, show error and stop.
         let formStepsRaw = null;
         let formConfig = null;
@@ -289,6 +400,12 @@ function render_forms_by_dan_form($atts) {
         } catch (e) {}
         if (!formStepsRaw) {
             formRoot.innerHTML = "<p style='color: red;'>No form JSON found in localStorage. Please set 'formsByDanFormJson' in localStorage to render the form.</p>";
+            return;
+        }
+        
+        // Check authentication token validity on form load
+        if (!validateAuthTokenExists()) {
+            formRoot.innerHTML = "<p style='color: red;'>Authentication token not found or expired. Please refresh the page and obtain a new authentication token.</p>";
             return;
         }
         try {
@@ -781,7 +898,7 @@ function render_forms_by_dan_form($atts) {
                 // Inject query parameters into hidden inputs
                 const form = document.getElementById('formsByDanForm');
                 const params = new URLSearchParams(window.location.search);
-                ['id', 'lastName', 'salt', 'token'].forEach(name => {
+                ['salt', 'token'].forEach(name => {
                     let input = form.querySelector(`input[name="${name}"]`);
                     if (!input) {
                         input = document.createElement('input');
@@ -790,23 +907,21 @@ function render_forms_by_dan_form($atts) {
                         form.appendChild(input);
                     }
                     let value = params.get(name) || '';
-                    
-                    // For lastName, also check localStorage
-                    if (name === 'lastName' && !value) {
-                        try {
-                            const localStorageLastName = localStorage.getItem('lastName');
-                            if (localStorageLastName) {
-                                value = localStorageLastName;
-                            }
-                        } catch (e) {}
-                    }
-                    
                     input.value = value;
-                    // Make lastName read-only if it is a visible input
-                    if (name === 'lastName') {
-                        input.readOnly = true;
-                        input.type = 'text'; // Ensure it's visible if not already
+                });
+                
+                // Handle id and lastName from localStorage
+                ['id', 'lastName'].forEach(name => {
+                    let input = form.querySelector(`input[name="${name}"]`);
+                    if (!input) {
+                        input = document.createElement('input');
+                        input.type = 'hidden';
+                        input.name = name;
+                        form.appendChild(input);
                     }
+                    // Get value from localStorage instead of URL params
+                    let value = localStorage.getItem(name) || '';
+                    input.value = value;
                 });
                 // Inject pid as hidden field
                 let pid = '';
@@ -901,6 +1016,13 @@ function render_forms_by_dan_form($atts) {
 
                 document.getElementById('formsByDanForm').onsubmit = e => {
                     e.preventDefault();
+                    
+                    // Validate authentication token before proceeding
+                    if (!validateAuthToken()) {
+                        alert('Authentication failed. Please refresh the page and try again.');
+                        return;
+                    }
+                    
                     if (!allStepsValid(true)) { // Validate all steps before submission
                         alert('Please complete all required fields before submitting.');
                         return;
@@ -937,6 +1059,13 @@ function render_forms_by_dan_form($atts) {
                         saveProgress();
                         const savedData = JSON.parse(localStorage.getItem(storageKey) || '{}');
                         savedData.files = savedFiles;
+                        
+                        // Add authentication data to the payload
+                        savedData.authToken = localStorage.getItem('authToken');
+                        savedData.tokenSalt = localStorage.getItem('tokenSalt');
+                        savedData.projectId = localStorage.getItem('projectId');
+                        savedData.id = localStorage.getItem('id');
+                        
                         // Get webhook configuration - try DOM elements first, then localStorage fallback
                         let webhookUrl = '';
                         let apiKey = '';

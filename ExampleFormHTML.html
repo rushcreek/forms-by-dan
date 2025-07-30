@@ -12,7 +12,7 @@
 
   <button type="submit">Submit</button>
 </form>
-<pre id="output"></pre>
+<p id="output"></p>
 
 <script>
 document.getElementById('tokenForm').onsubmit = async function(e) {
@@ -25,7 +25,7 @@ document.getElementById('tokenForm').onsubmit = async function(e) {
         redirectBaseUrl: form.redirectBaseUrl.value
     };
 
-    let response;
+    let response, data;
     try {
         response = await fetch('http://localhost:7072/api/generateToken', {
             method: 'POST',
@@ -37,33 +37,38 @@ document.getElementById('tokenForm').onsubmit = async function(e) {
         return;
     }
 
-    let data;
+    // Try to parse JSON, fallback to text if not JSON
     try {
-        // Only try to parse JSON if response is ok
-        if (response.ok) {
-            data = await response.json();
-        } else {
-            // If not ok, try to get error text once
-            const errorText = await response.text();
-            document.getElementById('output').textContent = 'Error: ' + errorText;
-            alert('Error: ' + errorText);
-            return;
-        }
+        data = await response.json();
     } catch (e) {
-        document.getElementById('output').textContent = 'Failed to parse response.';
-        alert('Failed to parse response.');
+        const text = await response.text();
+        document.getElementById('output').textContent = 'ERROR: ' + text;
+        alert('Non-JSON response: ' + text);
         return;
     }
 
-    // ...existing code to store JSON and redirect...
+    // Store the returned form JSON in localStorage for the plugin
     if (data && data.projectFormJson) {
         localStorage.setItem('formsByDanFormJson', data.projectFormJson);
-        document.getElementById('output').textContent = 'Form JSON stored in localStorage. You may now proceed to the form page.';
+        localStorage.setItem('id', data.id);
+        localStorage.setItem('lastName', data.lastName);
+        
+        // Store salt pepper token scheme data
+        if (data.authToken) localStorage.setItem('authToken', data.authToken);
+        if (data.tokenSalt) localStorage.setItem('tokenSalt', data.tokenSalt);
+        if (data.tokenIssuedAt) localStorage.setItem('tokenIssuedAt', data.tokenIssuedAt.toString());
+        if (data.tokenExpiresAt) localStorage.setItem('tokenExpiresAt', data.tokenExpiresAt.toString());
+        if (data.tokenExpiresIn) localStorage.setItem('tokenExpiresIn', data.tokenExpiresIn.toString());
+        if (data.tokenValidUntil) localStorage.setItem('tokenValidUntil', data.tokenValidUntil);
+        if (data.projectId) localStorage.setItem('projectId', data.projectId);
+
+        document.getElementById('output').textContent = 'Success. Now generating form...';
     } else {
-        alert('No form JSON found. Response: ' + JSON.stringify(data));
+        alert('No form structure found. Response: ' + JSON.stringify(data));
         return;
     }
 
+    // Redirect if redirectUrl is present
     if (data.redirectUrl) {
         window.location.href = data.redirectUrl;
         return;

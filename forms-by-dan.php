@@ -575,6 +575,16 @@ function render_forms_by_dan_form($atts) {
                         input.value = data[key];
                     }
                 });
+                
+                // Always populate lastName field from localStorage
+                const lastNameInput = document.querySelector('input[name="lastName"], input[id="lastName"]');
+                if (lastNameInput) {
+                    const lastNameValue = localStorage.getItem('lastName');
+                    if (lastNameValue) {
+                        lastNameInput.value = lastNameValue;
+                    }
+                }
+                
                 // Render file lists for all file inputs
                 document.querySelectorAll('input[type="file"]').forEach(input => {
                     renderFileListForInput(input);

@@ -1,18 +1,128 @@
-<!-- Example HTML form -->
-<form id="tokenForm">
-  <label for="id">User ID:</label>
-  <input type="text" id="id" name="id" required><br><br>
+<!-- Example HTML form with Forms by Dan styling -->
+<style>
+/* Modern, visually attractive form styles matching forms-by-dan.php */
+#tokenFormRoot {
+    max-width: 700px;
+    margin: 40px auto;
+    background: #f9fafd;
+    padding: 36px 32px 32px 32px;
+    border-radius: 18px;
+    box-shadow: 0 4px 32px rgba(0,0,0,0.10), 0 1.5px 6px rgba(0,0,0,0.04);
+    font-family: 'Segoe UI', Arial, sans-serif;
+}
 
-  <input type="hidden" id="pid" name="pid" value="65">
+#tokenFormRoot h2 {
+    color: #2d3a4a;
+    margin-top: 0;
+    margin-bottom: 24px;
+    font-size: 1.8em;
+    font-weight: 600;
+}
 
-  <label for="lastName">Last Name:</label>
-  <input type="text" id="lastName" name="lastName" required><br><br>
+.form-section label {
+    display: block;
+    margin-top: 18px;
+    font-weight: 500;
+    color: #2d3a4a;
+    letter-spacing: 0.01em;
+}
 
-  <input type="hidden" name="redirectBaseUrl" value="https://newatticus.local/gpt-test/">
+.form-section input {
+    width: 100% !important;
+    display: block !important;
+    margin: 10px 0 24px 0 !important;
+    padding: 14px 12px !important;
+    box-sizing: border-box !important;
+    border: 1.5px solid #d1d9e6 !important;
+    border-radius: 7px !important;
+    font-size: 17px !important;
+    background-color: #fff !important;
+    color: #222 !important;
+    transition: border-color 0.2s;
+}
 
-  <button type="submit">Submit</button>
-</form>
-<p id="output"></p>
+.form-section input:focus {
+    border-color: #0073aa !important;
+    outline: none;
+    box-shadow: 0 0 0 2px #e6f2fa;
+}
+
+.form-instruction {
+    font-size: 1.13em;
+    margin-bottom: 18px;
+    color: #3a4a5d;
+    background: #eaf6ff;
+    padding: 10px 16px;
+    border-radius: 6px;
+}
+
+button {
+    padding: 13px 28px;
+    font-size: 17px;
+    border: none;
+    border-radius: 7px;
+    background: linear-gradient(90deg, #0073aa 60%, #005f8d 100%);
+    color: #fff !important;
+    font-weight: 600;
+    cursor: pointer;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+    transition: background 0.2s, box-shadow 0.2s;
+    margin-top: 20px;
+}
+
+button:hover, button:focus {
+    background: linear-gradient(90deg, #005f8d 60%, #0073aa 100%);
+    box-shadow: 0 4px 16px rgba(0,0,0,0.08);
+}
+
+#output {
+    margin-top: 20px;
+    padding: 12px 16px;
+    border-radius: 6px;
+    font-size: 1.1em;
+    font-weight: 500;
+}
+
+#output:not(:empty) {
+    background: #eaf6ff;
+    color: #3a4a5d;
+    border-left: 4px solid #0073aa;
+}
+
+.error-message {
+    color: #d00;
+    font-weight: 600;
+    margin: 12px 0 0 0;
+    background: #fff0f0;
+    border-left: 4px solid #d00;
+    padding: 8px 14px;
+    border-radius: 5px;
+}
+</style>
+
+<div id="tokenFormRoot">
+    <h2>Authentication Form</h2>
+    <div class="form-instruction">
+        Please enter your credentials to access the claim form.
+    </div>
+    
+    <form id="tokenForm">
+        <div class="form-section">
+            <label for="id">User ID:</label>
+            <input type="text" id="id" name="id" required>
+
+            <input type="hidden" id="pid" name="pid" value="65">
+
+            <label for="lastName">Last Name:</label>
+            <input type="text" id="lastName" name="lastName" required>
+
+            <input type="hidden" name="redirectBaseUrl" value="https://www.mighty-geeks.com/claim-form/">
+
+            <button type="submit">Submit</button>
+        </div>
+    </form>
+    <div id="output"></div>
+</div>
 
 <script>
 document.getElementById('tokenForm').onsubmit = async function(e) {
@@ -27,7 +137,7 @@ document.getElementById('tokenForm').onsubmit = async function(e) {
 
     let response, data;
     try {
-        response = await fetch('http://localhost:7072/api/generateToken', {
+        response = await fetch('https://auth-webhook.azurewebsites.net/api/generatetoken', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)

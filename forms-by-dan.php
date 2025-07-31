@@ -1112,21 +1112,46 @@ function render_forms_by_dan_form($atts) {
                             body: JSON.stringify(savedData),
                             redirect: 'manual'
                         }).then(response => {
-                            // Only redirect or show a static message; never use response body to re-render the form
-                            if (response.status === 302 || response.status === 301) {
-                                const location = response.headers.get('Location');
-                                if (location) {
-                                    window.location.href = location;
-                                    return;
+                            // Parse the response body to get submission details
+                            return response.json().then(data => {
+                                if (response.ok || response.status === 200) {
+                                    // Show submission confirmation with response data
+                                    let confirmationHtml = '<div class="form-instruction" style="color:green;font-size:1.2em;">Thank you! Your submission has been received.</div>';
+                                    
+                                    if (data.message) {
+                                        confirmationHtml += `<div class="form-instruction" style="margin-top:20px;font-size:1.1em;">${data.message}</div>`;
+                                    }
+                                    
+                                    confirmationHtml += '<div class="form-instruction" style="margin-top:30px;font-size:1.1em;color:#2d3a4a;"><strong>Here is a copy of your submission details. Please save them for your records.</strong></div>';
+                                    
+                                    if (data.submissionId) {
+                                        confirmationHtml += `<div style="margin-top:15px;"><strong>Submission ID:</strong> ${data.submissionId}</div>`;
+                                    }
+                                    
+                                    if (data.submittedAt) {
+                                        const submittedDate = new Date(data.submittedAt).toLocaleString();
+                                        confirmationHtml += `<div style="margin-top:10px;"><strong>Submitted At:</strong> ${submittedDate}</div>`;
+                                    }
+                                    
+                                    if (data.pdfUrl) {
+                                        confirmationHtml += `<div style="margin-top:20px;"><strong>Your submission PDF:</strong><br><a href="${data.pdfUrl}" target="_blank" rel="noopener" style="color:#0073aa;text-decoration:underline;word-break:break-all;">${data.pdfUrl}</a></div>`;
+                                    }
+                                    
+                                    formRoot.innerHTML = confirmationHtml;
+                                    localStorage.removeItem(storageKey);
+                                } else {
+                                    // Handle error response
+                                    let errorMessage = 'Submission failed.';
+                                    if (data.message) {
+                                        errorMessage = data.message;
+                                    }
+                                    formRoot.innerHTML = `<div class="error-message" style="font-size:1.1em;">${errorMessage}</div>`;
                                 }
-                            }
-                            if (redirectUrl) {
-                                window.location.href = redirectUrl;
-                            } else {
-                                // Show a static success message (do not re-render form with response body)
+                            }).catch(parseError => {
+                                // Fallback if response isn't JSON
                                 formRoot.innerHTML = '<div class="form-instruction" style="color:green;font-size:1.2em;">Thank you! Your submission has been received.</div>';
                                 localStorage.removeItem(storageKey);
-                            }
+                            });
                         }).catch(() => {
                             alert('Submission failed.');
                         });

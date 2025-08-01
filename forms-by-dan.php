@@ -288,6 +288,126 @@ function render_forms_by_dan_form($atts) {
     document.addEventListener('DOMContentLoaded', function () {
         const formRoot = document.getElementById('formsByDanRoot');
         
+        // Check if we need to show authentication form first
+        function needsAuthentication() {
+            const formJson = localStorage.getItem('formsByDanFormJson');
+            const authToken = localStorage.getItem('authToken');
+            const tokenSalt = localStorage.getItem('tokenSalt');
+            
+            // If no form JSON or auth token, need authentication
+            return !formJson || !authToken || !tokenSalt;
+        }
+        
+        // Render authentication form
+        function renderAuthForm() {
+            formRoot.innerHTML = `
+                <h2>Authentication Form</h2>
+                <div class="form-instruction">
+                    Please enter your credentials to access the claim form.
+                </div>
+                
+                <form id="tokenForm">
+                    <div class="claims-section">
+                        <label for="auth-id">User ID:</label>
+                        <input type="text" id="auth-id" name="id" required>
+
+                        <label for="auth-lastName">Last Name:</label>
+                        <input type="text" id="auth-lastName" name="lastName" required>
+
+                        <button type="submit">Authenticate</button>
+                    </div>
+                </form>
+                <div id="auth-output"></div>
+            `;
+            
+            // Handle authentication form submission
+            document.getElementById('tokenForm').onsubmit = async function(e) {
+                e.preventDefault();
+                const form = e.target;
+                const submitBtn = form.querySelector('button[type="submit"]');
+                const output = document.getElementById('auth-output');
+                
+                // Get project ID from PHP-injected element
+                let pid = '';
+                const pidEl = document.getElementById('forms-by-dan-pid');
+                if (pidEl) pid = pidEl.textContent.trim();
+                
+                const payload = {
+                    id: form.id.value,
+                    pid: pid,
+                    lastName: form.lastName.value,
+                    redirectBaseUrl: window.location.origin + window.location.pathname
+                };
+                
+                submitBtn.disabled = true;
+                submitBtn.textContent = 'Authenticating...';
+                output.innerHTML = '';
+                
+                let response, data;
+                try {
+                    response = await fetch('https://auth-webhook.azurewebsites.net/api/generatetoken', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+                } catch (networkErr) {
+                    output.innerHTML = '<div class="error-message">Network error: ' + networkErr + '</div>';
+                    submitBtn.disabled = false;
+                    submitBtn.textContent = 'Authenticate';
+                    return;
+                }
+                
+                // Try to parse JSON, fallback to text if not JSON
+                try {
+                    data = await response.json();
+                } catch (e) {
+                    const text = await response.text();
+                    output.innerHTML = '<div class="error-message">ERROR: ' + text + '</div>';
+                    submitBtn.disabled = false;
+                    submitBtn.textContent = 'Authenticate';
+                    return;
+                }
+                
+                // Store the returned form JSON in localStorage for the plugin
+                if (data && data.projectFormJson) {
+                    localStorage.setItem('formsByDanFormJson', data.projectFormJson);
+                    localStorage.setItem('id', data.id);
+                    localStorage.setItem('lastName', data.lastName);
+                    
+                    // Store salt pepper token scheme data
+                    if (data.authToken) localStorage.setItem('authToken', data.authToken);
+                    if (data.tokenSalt) localStorage.setItem('tokenSalt', data.tokenSalt);
+                    if (data.tokenIssuedAt) localStorage.setItem('tokenIssuedAt', data.tokenIssuedAt.toString());
+                    if (data.tokenExpiresAt) localStorage.setItem('tokenExpiresAt', data.tokenExpiresAt.toString());
+                    if (data.tokenExpiresIn) localStorage.setItem('tokenExpiresIn', data.tokenExpiresIn.toString());
+                    if (data.tokenValidUntil) localStorage.setItem('tokenValidUntil', data.tokenValidUntil);
+                    if (data.projectId) localStorage.setItem('projectId', data.projectId);
+                    
+                    output.innerHTML = '<div class="form-instruction" style="color:green;">Authentication successful! Loading form...</div>';
+                    
+                    // Wait a moment then proceed to main form
+                    setTimeout(() => {
+                        proceedToMainForm();
+                    }, 1000);
+                } else {
+                    output.innerHTML = '<div class="error-message">No form structure found. Response: ' + JSON.stringify(data) + '</div>';
+                    submitBtn.disabled = false;
+                    submitBtn.textContent = 'Authenticate';
+                    return;
+                }
+            };
+        }
+        
+        // Proceed to main form after authentication
+        function proceedToMainForm() {
+            // Clear any auth-related elements and proceed with normal form logic
+            document.getElementById('auth-output')?.remove();
+            initializeMainForm();
+        }
+        
+        // Initialize main form (extracted from existing code)
+        function initializeMainForm() {
+        
         // Define authentication validation functions first
         function validateAuthToken() {
             try {
@@ -387,6 +507,7 @@ function render_forms_by_dan_form($atts) {
                 return false;
             }
         }
+        
         
         // Only use localStorage for form JSON. If not present, show error and stop.
         let formStepsRaw = null;
@@ -1209,6 +1330,14 @@ function render_forms_by_dan_form($atts) {
         } catch (e) {
             console.error('Failed to parse form JSON:', e);
             formRoot.innerHTML = "<p style='color: red;'>There was an error rendering the form. Please check the JSON definition.</p>";
+        }
+        } // End initializeMainForm
+        
+        // Main entry point - check if authentication is needed
+        if (needsAuthentication()) {
+            renderAuthForm();
+        } else {
+            initializeMainForm();
         }
     });
     </script>

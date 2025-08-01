@@ -55,24 +55,16 @@ add_action('add_meta_boxes', function () {
 });
 
 // Render the custom meta box
-// Add API Key field to meta box
+// Simplified meta box with only essential fields
 function render_forms_by_dan_meta_box($post) {
-    $form_json = get_post_meta($post->ID, '_forms_by_dan_form_json', true);
-    $webhook_url = get_post_meta($post->ID, '_forms_by_dan_webhook_url', true);
-    $api_key = get_post_meta($post->ID, '_forms_by_dan_api_key', true);
-    $redirect_url = get_post_meta($post->ID, '_forms_by_dan_redirect_url', true);
     $project_id = get_post_meta($post->ID, '_forms_by_dan_project_id', true);
     wp_nonce_field('save_forms_by_dan_meta', 'forms_by_dan_nonce');
-    echo '<p><label for="forms_by_dan_webhook_url">Webhook URL:</label><br>';
-    echo '<input type="text" id="forms_by_dan_webhook_url" name="forms_by_dan_webhook_url" value="' . esc_attr($webhook_url) . '" style="width:100%;"></p>';
-    echo '<p><label for="forms_by_dan_api_key">API Key (ocp-apim-subscription-key):</label><br>';
-    echo '<input type="text" id="forms_by_dan_api_key" name="forms_by_dan_api_key" value="' . esc_attr($api_key) . '" style="width:100%;"></p>';
+    
+    echo '<p><strong>Note:</strong> This plugin now handles authentication and form generation automatically. Users will authenticate first, then proceed to their personalized form.</p>';
+    
     echo '<p><label for="forms_by_dan_project_id">Project ID:</label><br>';
-    echo '<input type="text" id="forms_by_dan_project_id" name="forms_by_dan_project_id" value="' . esc_attr($project_id) . '" style="width:100%;"></p>';
-    echo '<p><label for="forms_by_dan_redirect_url">Redirect URL:</label><br>';
-    echo '<input type="text" id="forms_by_dan_redirect_url" name="forms_by_dan_redirect_url" value="' . esc_attr($redirect_url) . '" style="width:100%;"></p>';
-    echo '<p><label for="forms_by_dan_form_json">Form JSON:</label><br>';
-    echo '<textarea id="forms_by_dan_form_json" name="forms_by_dan_form_json" rows="15" style="width:100%;">' . esc_textarea($form_json) . '</textarea></p>';
+    echo '<input type="text" id="forms_by_dan_project_id" name="forms_by_dan_project_id" value="' . esc_attr($project_id) . '" style="width:100%;" required>';
+    echo '<small>The project ID that identifies which form to load for authenticated users.</small></p>';
 
     // Shortcode display section
     echo '<p><label for="forms_by_dan_shortcode">Shortcode:</label><br>';
@@ -92,20 +84,10 @@ add_action('save_post', function ($post_id) {
     if (!isset($_POST['forms_by_dan_nonce']) || !wp_verify_nonce($_POST['forms_by_dan_nonce'], 'save_forms_by_dan_meta')) return;
     if (defined('DOING_AUTOSAVE') && DOING_AUTOSAVE) return;
     if (!current_user_can('edit_post', $post_id)) return;
-    if (isset($_POST['forms_by_dan_webhook_url'])) {
-        update_post_meta($post_id, '_forms_by_dan_webhook_url', sanitize_text_field($_POST['forms_by_dan_webhook_url']));
-    }
-    if (isset($_POST['forms_by_dan_api_key'])) {
-        update_post_meta($post_id, '_forms_by_dan_api_key', sanitize_text_field($_POST['forms_by_dan_api_key']));
-    }
+    
+    // Only save Project ID - other fields are now handled automatically
     if (isset($_POST['forms_by_dan_project_id'])) {
         update_post_meta($post_id, '_forms_by_dan_project_id', sanitize_text_field($_POST['forms_by_dan_project_id']));
-    }
-    if (isset($_POST['forms_by_dan_redirect_url'])) {
-        update_post_meta($post_id, '_forms_by_dan_redirect_url', esc_url_raw($_POST['forms_by_dan_redirect_url']));
-    }
-    if (isset($_POST['forms_by_dan_form_json'])) {
-        update_post_meta($post_id, '_forms_by_dan_form_json', $_POST['forms_by_dan_form_json']);
     }
 });
 
@@ -131,17 +113,11 @@ function render_forms_by_dan_form($atts) {
     $post = get_post($atts['id']);
     if (!$post || $post->post_type !== 'forms_by_dan_form') return '';
 
-    $form_json = get_post_meta($post->ID, '_forms_by_dan_form_json', true);
-    $webhook_url = esc_url(get_post_meta($post->ID, '_forms_by_dan_webhook_url', true));
-    $api_key = esc_attr(get_post_meta($post->ID, '_forms_by_dan_api_key', true));
-    $redirect_url = esc_url(get_post_meta($post->ID, '_forms_by_dan_redirect_url', true));
+    // Only get Project ID - other configuration is handled automatically
     $project_id = esc_attr(get_post_meta($post->ID, '_forms_by_dan_project_id', true));
     ob_start();
     ?>
     <div id="formsByDanRoot"></div>
-<script type="text/plain" id="forms-by-dan-webhook-url"><?php echo $webhook_url; ?></script>
-<script type="text/plain" id="forms-by-dan-api-key"><?php echo $api_key; ?></script>
-<script type="text/plain" id="forms-by-dan-redirect-url"><?php echo $redirect_url; ?></script>
 <script type="text/plain" id="forms-by-dan-pid"><?php echo $project_id; ?></script>
     <style>
         /* Modern, visually attractive form styles */

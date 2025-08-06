@@ -11,6 +11,18 @@ add_shortcode('forms_by_dan', 'render_forms_by_dan_form');
 add_action('admin_menu', 'forms_by_dan_menu');
 add_action('admin_init', 'forms_by_dan_settings');
 
+// Add admin script enqueue for Forms by Dan edit pages
+add_action('admin_enqueue_scripts', function($hook) {
+    // Only load on the Forms by Dan edit pages
+    if ($hook === 'post.php' || $hook === 'post-new.php') {
+        global $post_type;
+        if ($post_type === 'forms_by_dan_form') {
+            // Enqueue WordPress admin scripts that might be needed
+            wp_enqueue_script('jquery');
+        }
+    }
+});
+
 add_action('init', function() {
     register_post_type('forms_by_dan_form', [
         'labels' => [
@@ -54,6 +66,38 @@ add_action('add_meta_boxes', function () {
     add_meta_box('forms_by_dan_meta', 'Form Configuration', 'render_forms_by_dan_meta_box', 'forms_by_dan_form', 'normal', 'high');
 });
 
+// JSON validation function
+function validate_form_json($json_string) {
+    try {
+        $data = json_decode($json_string, true);
+        if (json_last_error() !== JSON_ERROR_NONE) {
+            return ['valid' => false, 'error' => 'Invalid JSON: ' . json_last_error_msg()];
+        }
+        
+        // Check if it's an array of steps or an object with steps
+        $steps = is_array($data) ? $data : (isset($data['steps']) ? $data['steps'] : null);
+        
+        if (!$steps || !is_array($steps)) {
+            return ['valid' => false, 'error' => 'JSON must contain a "steps" array or be an array of steps'];
+        }
+        
+        // Validate each step has required fields
+        foreach ($steps as $index => $step) {
+            if (!isset($step['title'])) {
+                return ['valid' => false, 'error' => "Step $index missing 'title' field"];
+            }
+            if (!isset($step['html'])) {
+                return ['valid' => false, 'error' => "Step $index missing 'html' field"];
+            }
+        }
+        
+        return ['valid' => true, 'steps_count' => count($steps)];
+        
+    } catch (Exception $e) {
+        return ['valid' => false, 'error' => $e->getMessage()];
+    }
+}
+
 // Render the custom meta box
 // Add API Key field to meta box
 function render_forms_by_dan_meta_box($post) {
@@ -65,13 +109,274 @@ function render_forms_by_dan_meta_box($post) {
     echo '<input type="text" id="forms_by_dan_webhook_url" name="forms_by_dan_webhook_url" value="' . esc_attr($webhook_url) . '" style="width:100%;"></p>';
     echo '<p><label for="forms_by_dan_api_key">API Key (ocp-apim-subscription-key):</label><br>';
     echo '<input type="text" id="forms_by_dan_api_key" name="forms_by_dan_api_key" value="' . esc_attr($api_key) . '" style="width:100%;"></p>';
-    echo '<p><label for="forms_by_dan_form_json">Form JSON:</label><br>';
+    echo '<p><label for="forms_by_dan_form_json">Form JSON (for previewing):</label><br>';
     echo '<textarea id="forms_by_dan_form_json" name="forms_by_dan_form_json" rows="15" style="width:100%;">' . esc_textarea($form_json) . '</textarea></p>';
+
+    // Add preview button
+    echo '<p><button type="button" id="preview-form-btn" class="button button-secondary" style="margin-bottom:20px;">Preview Form</button></p>';
 
     // Shortcode display section
     echo '<p><label for="forms_by_dan_shortcode">Shortcode:</label><br>';
     echo '<input type="text" id="forms_by_dan_shortcode" value="[forms_by_dan id=' . esc_attr($post->ID) . ']" readonly style="width:100%;">';
     echo '<button type="button" class="button" onclick="navigator.clipboard.writeText(document.getElementById(\'forms_by_dan_shortcode\').value)">Copy to Clipboard</button></p>';
+
+    // Preview container
+    echo '<div id="form-preview-container" style="display:none; border:1px solid #ddd; padding:20px; margin-top:20px; background:#f9f9f9;">';
+    echo '<h3>Form Preview</h3>';
+    echo '<div id="form-preview-content"></div>';
+    echo '<button type="button" id="close-preview-btn" class="button" style="margin-top:10px;">Close Preview</button>';
+    echo '</div>';
+
+    // Add JavaScript for preview functionality
+    ?>
+    <script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const previewBtn = document.getElementById('preview-form-btn');
+        const closeBtn = document.getElementById('close-preview-btn');
+        const container = document.getElementById('form-preview-container');
+        const content = document.getElementById('form-preview-content');
+        const jsonTextarea = document.getElementById('forms_by_dan_form_json');
+
+        previewBtn.addEventListener('click', function() {
+            const jsonValue = jsonTextarea.value.trim();
+            if (!jsonValue) {
+                alert('Please enter Form JSON to preview.');
+                return;
+            }
+
+            try {
+                // Validate JSON
+                const formConfig = JSON.parse(jsonValue);
+                
+                // Store in localStorage for the preview
+                localStorage.setItem('formsByDanFormJsonPreview', jsonValue);
+                
+                // Show container
+                container.style.display = 'block';
+                
+                // Render preview
+                renderFormPreview(content, formConfig);
+                
+            } catch (e) {
+                alert('Invalid JSON: ' + e.message);
+            }
+        });
+
+        closeBtn.addEventListener('click', function() {
+            container.style.display = 'none';
+            content.innerHTML = '';
+            localStorage.removeItem('formsByDanFormJsonPreview');
+        });
+
+        function renderFormPreview(container, formConfig) {
+            // Create preview HTML with the same styles as the actual form
+            container.innerHTML = `
+                <div id="formsByDanPreviewRoot"></div>
+                <style>
+                    /* Same styles as the actual form */
+                    #formsByDanPreviewRoot {
+                        max-width: 700px;
+                        margin: 20px auto;
+                        background: #f9fafd;
+                        padding: 36px 32px 32px 32px;
+                        border-radius: 18px;
+                        box-shadow: 0 4px 32px rgba(0,0,0,0.10), 0 1.5px 6px rgba(0,0,0,0.04);
+                        font-family: 'Segoe UI', Arial, sans-serif;
+                    }
+                    .claims-section label {
+                        display: block;
+                        margin-top: 18px;
+                        font-weight: 500;
+                        color: #2d3a4a;
+                        letter-spacing: 0.01em;
+                    }
+                    .claims-section input,
+                    .claims-section select,
+                    .claims-section textarea {
+                        width: 100% !important;
+                        display: block !important;
+                        margin: 10px 0 24px 0 !important;
+                        padding: 14px 12px !important;
+                        box-sizing: border-box !important;
+                        border: 1.5px solid #d1d9e6 !important;
+                        border-radius: 7px !important;
+                        font-size: 17px !important;
+                        background-color: #fff !important;
+                        color: #222 !important;
+                        transition: border-color 0.2s;
+                    }
+                    .claims-section input:focus,
+                    .claims-section select:focus,
+                    .claims-section textarea:focus {
+                        border-color: #0073aa !important;
+                        outline: none;
+                        box-shadow: 0 0 0 2px #e6f2fa;
+                    }
+                    .claims-section input[type="checkbox"] {
+                        width: 24px !important;
+                        margin: 0 8px 0 0 !important;
+                        accent-color: #0073aa;
+                    }
+                    .claims-section label {
+                        display: flex;
+                        align-items: center;
+                        gap: 10px;
+                    }
+                    .form-instruction {
+                        font-size: 1.13em;
+                        margin-bottom: 18px;
+                        color: #3a4a5d;
+                        background: #eaf6ff;
+                        padding: 10px 16px;
+                        border-radius: 6px;
+                    }
+                    .form-navigation {
+                        display: flex;
+                        justify-content: space-between;
+                        margin-top: 36px;
+                        gap: 12px;
+                    }
+                    .preview-button {
+                        padding: 13px 28px;
+                        font-size: 17px;
+                        border: none;
+                        border-radius: 7px;
+                        background: linear-gradient(90deg, #666 60%, #555 100%);
+                        color: #fff !important;
+                        font-weight: 600;
+                        cursor: pointer;
+                        box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+                        transition: background 0.2s, box-shadow 0.2s;
+                    }
+                    .preview-button:hover {
+                        background: linear-gradient(90deg, #555 60%, #666 100%);
+                    }
+                    .preview-button:disabled {
+                        background: #ccc;
+                        cursor: not-allowed;
+                    }
+                    .hidden { display: none; }
+                    .preview-notice {
+                        background: #fff3cd;
+                        border: 1px solid #ffeaa7;
+                        color: #856404;
+                        padding: 10px;
+                        border-radius: 5px;
+                        margin-bottom: 20px;
+                        font-weight: 500;
+                    }
+                </style>
+            `;
+
+            // Initialize preview form
+            initializePreviewForm(formConfig);
+        }
+
+        function initializePreviewForm(formConfig) {
+            const formRoot = document.getElementById('formsByDanPreviewRoot');
+            
+            let formSteps, warnings;
+            if (Array.isArray(formConfig)) {
+                formSteps = formConfig;
+                warnings = [];
+            } else {
+                formSteps = formConfig.steps;
+                warnings = formConfig.warnings || [];
+            }
+
+            let currentStep = 0;
+            const storageKey = 'multiStepFormDataPreview';
+
+            function renderPreviewStep() {
+                const step = formSteps[currentStep];
+                const instructionHtml = step.instruction ? `<div class="form-instruction">${step.instruction}</div>` : '';
+                const stepContent = step.html;
+                const wrappedContent = `<div class="claims-section">${instructionHtml}${stepContent}</div>`;
+
+                formRoot.innerHTML = `
+                    <div class="preview-notice">
+                        <strong>Preview Mode:</strong> This is a preview of your form. Data will not be submitted.
+                    </div>
+                    <form id="formsByDanPreviewForm">
+                        <h2>${step.title}</h2>
+                        ${wrappedContent}
+                        <div class="form-navigation">
+                            <button type="button" class="preview-button" id="prevBtnPreview" ${currentStep === 0 ? 'disabled' : ''}>Back</button>
+                            <span style="flex-grow:1; text-align:center; padding:15px; color:#666;">
+                                Step ${currentStep + 1} of ${formSteps.length}
+                            </span>
+                            <button type="button" class="preview-button" id="nextBtnPreview" ${currentStep === formSteps.length - 1 ? 'disabled' : ''}>
+                                ${currentStep === formSteps.length - 1 ? 'Final Step' : 'Next'}
+                            </button>
+                        </div>
+                    </form>`;
+
+                // Attach navigation handlers
+                document.getElementById('prevBtnPreview').onclick = () => {
+                    if (currentStep > 0) {
+                        currentStep--;
+                        renderPreviewStep();
+                    }
+                };
+
+                document.getElementById('nextBtnPreview').onclick = () => {
+                    if (currentStep < formSteps.length - 1) {
+                        currentStep++;
+                        renderPreviewStep();
+                    }
+                };
+
+                // Attach conditional handlers for interactive preview
+                attachPreviewConditionalHandlers();
+            }
+
+            function attachPreviewConditionalHandlers() {
+                // Handle data-toggle-target checkboxes
+                const checkboxes = document.querySelectorAll('input[type="checkbox"][data-toggle-target]');
+                checkboxes.forEach(box => {
+                    const targetSelector = box.getAttribute('data-toggle-target');
+                    if (!targetSelector) return;
+                    const targets = document.querySelectorAll(targetSelector);
+                    box.onchange = () => {
+                        targets.forEach(div => {
+                            div.classList.toggle('hidden', !box.checked);
+                        });
+                    };
+                    // Initial state
+                    box.dispatchEvent(new Event('change'));
+                });
+
+                // Handle specific toggles from your form
+                const toggle = (id, fields, required = []) => {
+                    const box = document.getElementById(id);
+                    const div = document.getElementById(fields);
+                    if (!box || !div) return;
+                    box.onchange = () => {
+                        div.classList.toggle('hidden', !box.checked);
+                    };
+                    box.dispatchEvent(new Event('change'));
+                };
+
+                toggle('claimOrdinary', 'ordinaryFields');
+                toggle('claimTime', 'timeFields');
+                toggle('claimExtraordinary', 'extraFields');
+
+                const noEmail = document.getElementById('noEmail');
+                const email = document.querySelector('input[name="email"]');
+                if (noEmail && email) {
+                    noEmail.onchange = () => {
+                        email.closest('label').style.display = noEmail.checked ? 'none' : 'block';
+                    };
+                    noEmail.dispatchEvent(new Event('change'));
+                }
+            }
+
+            // Start rendering
+            renderPreviewStep();
+        }
+    });
+    </script>
+    <?php
 }
 // Allow unfiltered HTML in the signin form.
 add_action('admin_init', function() {

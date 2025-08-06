@@ -265,6 +265,43 @@ function render_forms_by_dan_meta_box($post) {
                         margin-bottom: 20px;
                         font-weight: 500;
                     }
+                    .file-list {
+                        margin-top: 6px;
+                        margin-bottom: 10px;
+                        display: block;
+                        width: 100%;
+                    }
+                    .file-entry {
+                        display: block;
+                        margin-bottom: 2px;
+                        font-size: 15px;
+                        color: #2d3a4a;
+                        word-break: break-word;
+                        white-space: normal;
+                        width: 100%;
+                    }
+                    .file-entry .delete-file-x {
+                        display: inline-flex;
+                        align-items: center;
+                        justify-content: center;
+                        margin-left: 8px;
+                        cursor: pointer;
+                        background: none;
+                        border: none;
+                        color: #d00;
+                        font-size: 16px;
+                        line-height: 1;
+                        transition: color 0.2s;
+                        position: relative;
+                        font-family: Arial, sans-serif;
+                    }
+                    .file-entry .delete-file-x:hover {
+                        color: #a00;
+                    }
+                    .file-entry .delete-file-x::before {
+                        content: '🗑️';
+                        font-size: 16px;
+                    }
                 </style>
             `;
 
@@ -562,18 +599,26 @@ function render_forms_by_dan_form($atts) {
             width: 100%;
         }
         .file-entry .delete-file-x {
-            color: #d00;
-            font-size: 18px;
-            font-weight: bold;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
             margin-left: 8px;
             cursor: pointer;
             background: none;
             border: none;
-            padding: 0 4px;
+            color: #d00;
+            font-size: 16px;
             line-height: 1;
+            transition: color 0.2s;
+            position: relative;
+            font-family: Arial, sans-serif;
         }
         .file-entry .delete-file-x:hover {
             color: #a00;
+        }
+        .file-entry .delete-file-x::before {
+            content: '🗑️';
+            font-size: 16px;
         }
         .hidden { display: none; }
     </style>
@@ -835,7 +880,7 @@ function render_forms_by_dan_form($atts) {
                     files.forEach((file, idx) => {
                         const fileDiv = document.createElement('div');
                         fileDiv.className = 'file-entry';
-                        fileDiv.innerHTML = `<span>${file.name}</span><span class="delete-file-x" title="Delete file" data-key="${key}" data-idx="${idx}">×</span>`;
+                        fileDiv.innerHTML = `<span>${file.name}</span><span class="delete-file-x" title="Delete file" data-key="${key}" data-idx="${idx}"></span>`;
                         fileListDiv.appendChild(fileDiv);
                     });
                 }

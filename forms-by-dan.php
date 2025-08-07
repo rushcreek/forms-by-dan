@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Forms by Dan
  * Description: Embed a multi-step ACEN claim form into pages and posts using the [forms_by_dan] shortcode.
- * Version: 1.52
+ * Version: 1.53
  * Author: Dan Wegner
  */
 

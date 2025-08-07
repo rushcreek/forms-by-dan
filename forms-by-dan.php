@@ -1249,10 +1249,12 @@ function render_forms_by_dan_form($atts) {
                         </div>
                     </form>`;
 
-                // Inject query parameters into hidden inputs
+                // Inject authentication data into hidden inputs
                 const form = document.getElementById('formsByDanForm');
-                const params = new URLSearchParams(window.location.search);
-                ['salt', 'token'].forEach(name => {
+                
+                // Add authentication fields from localStorage
+                const authFields = ['authToken', 'tokenSalt', 'tokenExpiresAt', 'tokenValidUntil', 'projectId'];
+                authFields.forEach(name => {
                     let input = form.querySelector(`input[name="${name}"]`);
                     if (!input) {
                         input = document.createElement('input');
@@ -1260,7 +1262,7 @@ function render_forms_by_dan_form($atts) {
                         input.name = name;
                         form.appendChild(input);
                     }
-                    let value = params.get(name) || '';
+                    let value = localStorage.getItem(name) || '';
                     input.value = value;
                 });
                 
@@ -1417,6 +1419,8 @@ function render_forms_by_dan_form($atts) {
                         // Add authentication data to the payload
                         savedData.authToken = localStorage.getItem('authToken');
                         savedData.tokenSalt = localStorage.getItem('tokenSalt');
+                        savedData.tokenExpiresAt = localStorage.getItem('tokenExpiresAt');
+                        savedData.tokenValidUntil = localStorage.getItem('tokenValidUntil');
                         savedData.projectId = localStorage.getItem('projectId');
                         savedData.id = localStorage.getItem('id');
                         
